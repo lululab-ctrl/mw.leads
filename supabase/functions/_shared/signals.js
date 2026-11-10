@@ -92,10 +92,10 @@ export function differs(a, b) {
   return false;
 }
 
-// HTML body for a note posted to monday, signed with the real person's name
-export function noteHtml(text, by) {
+// HTML body for a note posted to monday: just the note (no names; who did it is kept in MWP Leads)
+export function noteHtml(text) {
   const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  return "<p>" + esc(text).replace(/\n/g, "<br>") + "<br>— " + esc(by) + "</p>";
+  return "<p>" + esc(text).replace(/\n/g, "<br>") + "</p>";
 }
 
 // monday update → a history row

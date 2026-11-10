@@ -32,7 +32,7 @@ A lead changed from the page in the last 30 seconds is left alone. Leads that le
 Won and Lost never show; Future sits behind "Call later (n)".
 
 **Buttons.** No answer (posts "No answer", count +1), the 8 statuses, Lost → reason (Price, Dates, Not a fit, No response, Other),
-Save the note only. Every note posted to monday ends with "— Name" (one monday token posts them all), and every press is logged in `lead_actions`.
+Save the note only. Notes posted to monday carry no names (Jeinna, 10 Nov 2026); who did each press is kept only here: `lead_actions` (every press, with email and name, also failed ones), `note_authors` (monday update id → real author, so the sync keeps the right name), the stamp and the History.
 
 **Stamps, locks and history (added 10 Nov 2026).**
 - Every lead shows who last changed it and when ("✎ Emilia · 10 Nov, 14:32 · Status → Offer sent"), whether the change was made here or in monday (team notes, and Status changes from monday's activity log).

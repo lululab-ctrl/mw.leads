@@ -36,7 +36,7 @@ ok(d2.last_t === "old", "older note than the kept one is ignored");
 const d3 = merge(fromItem(it), prev, { last: { t: "newer", at: 200000, by: "B" } });
 ok(d3.last_t === "newer" && differs(prev, d3), "newer note replaces and marks changed");
 ok(!differs(d3, { ...d3 }), "same row → no write");
-ok(noteHtml("a<b\nc", "Eliran") === "<p>a&lt;b<br>c<br>— Eliran</p>", "note is escaped and signed");
+ok(noteHtml("a<b\nc") === "<p>a&lt;b<br>c</p>", "note is escaped, with no name");
 const sl = statusLog({ data: JSON.stringify({ column_id: C.status, pulse_id: 99, value: { label: { text: "Won" } }, previous_value: { label: { text: "Offer sent" } } }), created_at: "17947000000000000", user_id: 5 });
 ok(sl && sl.lead_id === "99" && sl.to === "Won" && sl.from === "Offer sent" && sl.at === 1794700000000, "status change from monday's activity log");
 ok(statusLog({ data: JSON.stringify({ column_id: "other", pulse_id: 1 }), created_at: "1" }) === null, "other columns ignored");

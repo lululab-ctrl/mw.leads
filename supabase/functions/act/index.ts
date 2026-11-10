@@ -38,9 +38,12 @@ Deno.serve(async (req) => {
   let updateId: string | null = null;
   try {
     if (text) {
-      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: noteHtml(text, me.name) });
+      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: noteHtml(text) });
       updateId = d?.create_update?.id ? String(d.create_update.id) : null;
       fields.last_t = text.slice(0, 400); fields.last_at = Date.now(); fields.last_by = me.name;
+      // monday shows only the note, no names (Jeinna, 10 Nov 2026). The real author is kept here,
+      // so the sync, the stamp and the history always show who did it.
+      if (updateId) await db.from("note_authors").upsert({ update_id: updateId, by: me.name, why: "MWP Leads" });
     }
     if (noAnswer) fields.na = (l.na || 0) + 1;
     if (label && label !== l.status) {
