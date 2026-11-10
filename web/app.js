@@ -175,6 +175,8 @@ async function openLead(id) {
   const c = await claim(id);
   if (!c.ok) { toast((c.by || "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now"), true); return; }
   S.open = id; S.hist = []; S.openCopy = l;
+  // where the list was and which section the lead was in, to come back to the same place on Close
+  S.listY = window.scrollY; S.openSec = secOf(id);
   clearInterval(S.hb); S.hb = setInterval(() => { if (S.open) claim(S.open); }, 60000);
   loadHist(id);
   renderLead(id, true);
@@ -209,10 +211,22 @@ function closeLead() {
   const id = S.open; S.open = null; S.openCopy = null; clearInterval(S.hb); release(id);
   $("lead").hidden = true; $("home").hidden = !S.user;
   render();
-  // show where the lead is in the list, if it's still listed
-  const row = id && document.querySelector('.row[data-id="' + CSS.escape(id) + '"]');
-  if (row) { row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(() => row.classList.remove("flash"), 1800); }
+  window.scrollTo(0, S.listY || 0); // back exactly where you were
+  // if what you did moved the lead, say where it went
+  const before = S.openSec, after = id ? secOf(id) : null, l = id && S.leads.get(id);
+  if (l && before !== after) {
+    const name = l.name || "";
+    if (after === null) toast(name + L(" יצא/ה מהרשימה (", " left the list (") + (STM[l.status] ? L(STM[l.status].he, l.status) : l.status) + ")" + (l.status === "Future" ? L(" · נמצא/ת ב״לחזור אליהם אחר כך״", " · it's under Call later") : ""));
+    else toast(name + L(" עבר/ה ל״", " moved to \u201c") + secName(after) + L("״", "\u201d"));
+  }
 }
+// which list section a lead is in right now (null: not listed, e.g. Won, Lost, Future)
+function secOf(id) {
+  const l = S.leads.get(id);
+  if (!l || l.status === "Won" || l.status === "Lost" || (l.status === "Future" && !S.later)) return null;
+  return facts(l).g;
+}
+function secName(g) { return [L("להתקשר קודם", "Call first"), L("בתהליך", "In progress"), L("ישנים, עוד לא חזרנו אליהם", "Old, never called"), L("טופלו היום", "Done today")][g]; }
 async function loadHist(id) {
   const { data } = await sb.from("lead_updates").select("*").eq("lead_id", id).order("at", { ascending: false }).limit(40);
   if (S.open !== id) return;
