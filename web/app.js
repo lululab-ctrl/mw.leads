@@ -215,7 +215,7 @@ function renderLead(id, fresh) {
     '<div id="lostWhy" hidden><div class="q">Lost reason</div><div class="two" style="margin-top:10px">' + LOST.map((r) => '<button type="button" class="soft" data-lost="' + r[0] + '">' + r[0] + '</button>').join('') + '</div></div>' +
     '<div class="q">' + L("היסטוריה", "History") + '</div><div id="hist" class="hist"></div>' +
     '<div class="leadfoot"><a class="mon" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(l.id) + '">' + L("פתיחה ב-monday", "Open in monday") + '</a>' +
-    '<button type="button" class="trash" data-act="delete" aria-label="' + L("מחיקת הליד", "Delete this lead") + '" title="' + L("מחיקת הליד", "Delete this lead") + '">' + TRASH + '</button></div>';
+    (S.me && S.me.can_delete ? '<button type="button" class="trash" data-act="delete" aria-label="' + L("מחיקת הליד", "Delete this lead") + '" title="' + L("מחיקת הליד", "Delete this lead") + '">' + TRASH + '</button>' : '') + '</div>'; // only Matan and Jeinna can delete
   $("lead").hidden = false; $("lead").scrollTop = keep; $("home").hidden = true;
   try { const dr = localStorage.getItem("mwpl.draft." + id); if (dr && fresh) $("noteBox").value = dr; } catch (_) {}
   renderHist();
@@ -432,6 +432,7 @@ function errText(e) {
   if (c === "no_token") return L("החיבור ל-monday עוד לא הוגדר (חסר מפתח API). הרשימה השמורה מוצגת.", "The monday connection isn't set up yet (no API token). Showing the saved list.");
   if (c === "needs_reauth") return L("monday דחה את מפתח ה-API. צריך מפתח חדש.", "monday refused the API token. A new token is needed.");
   if (c === "not_team" || c === "signed_out") return L("צריך להתחבר מחדש.", "Please sign in again.");
+  if (c === "no_delete") return L("רק מתן וג׳ינה יכולים למחוק לידים.", "Only Matan and Jeinna can delete leads.");
   if (c === "note_required") return L("קודם כותבים הערה", "Write a note first");
   if (c === "tool_error") return L("monday החזיר שגיאה: ", "monday returned an error: ") + ((e && e.message) || "");
   return L("monday לא עונה כרגע. מוצגת הרשימה האחרונה שנשמרה.", "monday isn't answering right now. Showing the last saved list.");
@@ -510,7 +511,7 @@ async function start(user) {
   S.user = user;
   $("signin").hidden = true; $("home").hidden = false;
   showPw(false);
-  const { data: me } = await sb.from("team").select("name,email").eq("email", (user.email || "").toLowerCase()).maybeSingle();
+  const { data: me } = await sb.from("team").select("name,email,can_delete").eq("email", (user.email || "").toLowerCase()).maybeSingle();
   S.me = me || null;
   if (!me) { S.dbReady = true; banner(L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list."), ""); render(); return; }
   await Promise.all([loadAll(), loadMeta(), loadLocks()]);

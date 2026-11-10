@@ -32,6 +32,7 @@ Deno.serve(async (req) => {
 
   // delete: the lead goes from monday (to monday's Trash, where it can be restored for 30 days) and from this list
   if (b.delete === true) {
+    if (!me.can_delete) return json({ ok: false, code: "no_delete" }, 403); // only Matan and Jeinna
     try {
       await monday(`mutation ($i: ID!) { delete_item(item_id: $i) { id } }`, { i: id });
     } catch (e) {

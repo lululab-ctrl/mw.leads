@@ -20,7 +20,7 @@
     const res = () => {
       if (table === "leads") return { data: rows.slice(), error: null };
       if (table === "sync_meta") return { data: { at: now - 20000 }, error: null };
-      if (table === "team") return { data: { name: "Jeinna", email: "tester@example.com" }, error: null };
+      if (table === "team") return { data: { name: "Jeinna", email: "tester@example.com", can_delete: !location.hash.includes("nodelete") }, error: null };
       if (table === "lead_locks") return { data: [{ lead_id: "7", by_email: "emilia@example.com", by_name: "Emilia", at: new Date().toISOString(), expires: new Date(Date.now() + 6e5).toISOString() }], error: null };
       if (table === "lead_updates") return { data: [
         { id: "u2", lead_id: "1", kind: "status", text: "New Lead → In conversation", by: "Eliran", at: now - 2 * H, source: "monday", bot: false },

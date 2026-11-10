@@ -17,13 +17,13 @@ export function admin(): SupabaseClient {
 }
 
 // the signed-in team member behind this request, or null
-export async function teamMember(req: Request, db: SupabaseClient): Promise<{ email: string; name: string } | null> {
+export async function teamMember(req: Request, db: SupabaseClient): Promise<{ email: string; name: string; can_delete?: boolean } | null> {
   const jwt = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (!jwt) return null;
   const { data, error } = await db.auth.getUser(jwt);
   const email = data?.user?.email?.toLowerCase();
   if (error || !email || !data.user.email_confirmed_at) return null;
-  const { data: t } = await db.from("team").select("email,name").eq("email", email).maybeSingle();
+  const { data: t } = await db.from("team").select("email,name,can_delete").eq("email", email).maybeSingle();
   return t || null;
 }
 
