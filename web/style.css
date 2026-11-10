@@ -128,11 +128,15 @@ button{cursor:pointer}
 #signin input + input{margin-top:0}
 .row.flash .open{outline:3px solid var(--c-new);outline-offset:2px}
 
-/* sections as tabs (tap to switch instead of scrolling) */
-.tabs{position:sticky;top:0;z-index:2;display:flex;gap:8px;overflow-x:auto;padding:10px 0;margin:6px 0 4px;background:var(--bg);scrollbar-width:none;-webkit-overflow-scrolling:touch}
+/* sections as tabs: plain text, the chosen one underlined (tap to switch instead of scrolling) */
+.tabs{position:sticky;top:0;z-index:2;display:flex;gap:2px;overflow-x:auto;margin:10px 0 12px;background:var(--bg);border-bottom:1px solid var(--line);scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .tabs::-webkit-scrollbar{display:none}
-.tab{flex:none;min-height:44px;border-radius:999px;border:2px solid var(--line);background:var(--bg);padding:0 14px;font-weight:700;font-size:15px;white-space:nowrap;color:var(--fg)}
-.tab span{font-weight:500;color:var(--muted);margin-inline-start:4px}
-.tab.hot{color:var(--hot)}
-.tab.on{background:var(--ink);border-color:var(--ink);color:var(--ink-fg)}
-.tab.on span{color:inherit;opacity:.8}
+.tab{flex:none;position:relative;min-height:46px;border:none;background:none;padding:0 12px;font-weight:500;font-size:16px;white-space:nowrap;color:var(--muted)}
+.tab span{display:inline-block;min-width:22px;margin-inline-start:6px;padding:1px 7px;border-radius:6px;background:var(--card);color:var(--muted);font-size:13px;font-weight:700;line-height:1.5}
+.tab:hover{color:var(--fg)}
+.tab.on{color:var(--fg);font-weight:700}
+.tab.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--ink)}
+.tab.on span{background:var(--ink);color:var(--ink-fg)}
+.tab.hot span{background:#FBE3E7;color:var(--hot)}
+.tab.hot.on span{background:var(--hot);color:#fff}
+.tab.hot.on::after{background:var(--hot)}
