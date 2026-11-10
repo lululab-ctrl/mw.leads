@@ -106,3 +106,9 @@ button{cursor:pointer}
 .hi small{display:block;color:var(--muted);font-size:13px;margin-top:4px}
 .hi.bot{opacity:.7}
 .hi.muted{color:var(--muted)}
+
+/* hidden things stay hidden (Matan's page got this from Claude's frame; without it the empty warning bar and toast showed) */
+[hidden]{display:none!important}
+
+/* Back stays at the top while the lead screen scrolls */
+#lead .back{position:sticky;top:0;z-index:3;box-shadow:0 4px 14px rgba(50,51,56,.18)}
