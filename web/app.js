@@ -167,9 +167,9 @@ function render() {
     // your Focus lists come first, in their own colour; then the sections
     const ft = S.focus.map((f) => '<button type="button" role="tab" class="tab focus' + (fo && fo.id === f.id ? " on" : "") + '" aria-selected="' + !!(fo && fo.id === f.id) + '" data-focus="' + esc(f.id) + '" title="' + esc(f.name) + '"><i>★ ' + esc(f.name) + '</i> <span>' + focusCount(f, r) + '</span></button>').join("");
     const nCalls = r.filter(isCall).length, lateCalls = r.filter((l) => isCall(l) && callLate(l)).length;
-    // Follow-ups sits right after In progress (Jeinna, 10 Nov 2026)
+    // Follow-ups sits right after Call later (Jeinna, 10 Nov 2026)
     const ct = '<button type="button" role="tab" class="tab calls' + (callsMode ? " on" : "") + (lateCalls ? " late" : "") + '" aria-selected="' + callsMode + '" data-calls="1">' + L("פולואפים", "Follow-ups") + ' <span>' + nCalls + '</span></button>';
-    const th = ft + ORDER.map((i) => [names[i], i]).map(([name, i]) => { const on = !fo && !callsMode && S.tab === i; return '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (on ? " on" : "") + '" aria-selected="' + on + '" data-tab="' + i + '">' + esc(name) + ' <span>' + all[i] + '</span></button>' + (i === 1 ? ct : ""); }).join("");
+    const th = ft + ORDER.map((i) => [names[i], i]).map(([name, i]) => { const on = !fo && !callsMode && S.tab === i; return '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (on ? " on" : "") + '" aria-selected="' + on + '" data-tab="' + i + '">' + esc(name) + ' <span>' + all[i] + '</span></button>' + (i === 4 ? ct : ""); }).join("");
     if ($("tabs").innerHTML !== th) { $("tabs").innerHTML = th; tabArrows(); }
   }
   if (fo) r = r.filter((l) => focusHas(fo, l));
@@ -268,7 +268,7 @@ function secOf(id) {
 function TABS() { return [L("להתקשר קודם", "Call first"), L("בתהליך", "In progress"), L("ישנים, עוד לא חזרנו אליהם", "Old, never called"), L("טופלו היום", "Done today"), L("לחזור אליהם אחר כך", "Call later")]; }
 function secName(g) { return TABS()[g]; }
 // the order of the tabs and the sections: Old, never called comes last (Jeinna, 10 Nov 2026)
-const ORDER = [0, 1, 4, 3, 2]; // Call first, In progress, (Follow-ups), Call later, Done today, Old never called
+const ORDER = [0, 1, 4, 3, 2]; // Call first, In progress, Call later, (Follow-ups), Done today, Old never called
 async function loadHist(id) {
   const { data } = await sb.from("lead_updates").select("*").eq("lead_id", id).order("at", { ascending: false }).limit(40);
   if (S.open !== id) return;
