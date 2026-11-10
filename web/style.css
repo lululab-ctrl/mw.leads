@@ -126,3 +126,4 @@ button{cursor:pointer}
 .pwbox .msg{border-radius:12px;padding:10px 12px;font-size:15px;background:var(--bg)}
 .pwbox .msg.bad{color:var(--hot)}
 #signin input + input{margin-top:0}
+.row.flash .open{outline:3px solid var(--c-new);outline-offset:2px}

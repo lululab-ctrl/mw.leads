@@ -148,7 +148,7 @@ function render() {
   $("signout").textContent = L("יציאה", "Sign out");
   $("whoName").textContent = S.me ? S.me.name : (S.user ? S.user.email : "");
   renderSignin();
-  if (S.open && !S.leads.has(S.open)) closeLead();
+  // an open lead stays open even if it leaves the list (e.g. Won / Lost); it closes on Back
   if (!S.dbReady && !S.leads.size) return;
   const r = rows(), list = $("list"); let nLater = 0;
   S.leads.forEach((l) => { if (l.status === "Future") nLater++; });
@@ -174,9 +174,15 @@ async function openLead(id) {
   if (k) { toast(k.by_name + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now"), true); return; }
   const c = await claim(id);
   if (!c.ok) { toast((c.by || "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now"), true); return; }
-  S.open = id; S.hist = [];
+  S.open = id; S.hist = []; S.openCopy = l;
   clearInterval(S.hb); S.hb = setInterval(() => { if (S.open) claim(S.open); }, 60000);
   loadHist(id);
+  renderLead(id, true);
+}
+// draws the open lead; after a press it redraws in place (the lead stays open until Back)
+function renderLead(id, fresh) {
+  const l = S.leads.get(id) || S.openCopy; if (!l) return;
+  const keep = fresh ? 0 : $("lead").scrollTop;
   const f = facts(l), e = tel(l.phone), w = why(l, f);
   const btns = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed", "Won", "Future", "Lost"].map((k) =>
     '<button type="button" class="big st-' + STM[k].c + (l.status === k ? " cur" : "") + '" data-st="' + k + '">' + esc(word(k)) + '</button>').join("");
@@ -196,12 +202,16 @@ async function openLead(id) {
     '<div id="lostWhy" hidden><div class="q">Lost reason</div><div class="two" style="margin-top:10px">' + LOST.map((r) => '<button type="button" class="soft" data-lost="' + r[0] + '">' + r[0] + '</button>').join('') + '</div></div>' +
     '<div class="q">' + L("היסטוריה", "History") + '</div><div id="hist" class="hist"></div>' +
     '<a class="mon" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(l.id) + '">' + L("פתיחה ב-monday", "Open in monday") + '</a>';
-  $("lead").hidden = false; $("lead").scrollTop = 0; $("home").hidden = true;
+  $("lead").hidden = false; $("lead").scrollTop = keep; $("home").hidden = true;
   renderHist();
 }
 function closeLead() {
-  const id = S.open; S.open = null; clearInterval(S.hb); release(id);
-  $("lead").hidden = true; $("home").hidden = !S.user; draw();
+  const id = S.open; S.open = null; S.openCopy = null; clearInterval(S.hb); release(id);
+  $("lead").hidden = true; $("home").hidden = !S.user;
+  render();
+  // show where the lead went in the list (e.g. Done today), if it's still listed
+  const row = id && document.querySelector('.row[data-id="' + CSS.escape(id) + '"]');
+  if (row) { row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(() => row.classList.remove("flash"), 1800); }
 }
 async function loadHist(id) {
   const { data } = await sb.from("lead_updates").select("*").eq("lead_id", id).order("at", { ascending: false }).limit(40);
@@ -230,17 +240,18 @@ async function fn(name, body) {
   return j;
 }
 
-/* one tap = save the note (if any) and the answer to monday, then back to the list */
+/* one tap = save the note (if any) and the answer to monday; the lead stays open until Back (Matan, 10 Nov 2026) */
 async function finish(label, noAnswer, reason) {
-  const id = S.open, l = S.leads.get(id); if (!l) return;
+  const id = S.open, l = S.leads.get(id) || S.openCopy; if (!l) return;
   const box = $("noteBox"), text = (box ? box.value : "").trim();
   if (!label && !noAnswer && !text) { toast(L("קודם כותבים הערה", "Write a note first"), true); return; }
   const bs = $("leadBody").querySelectorAll("button"); bs.forEach((b) => { b.disabled = true; });
   try {
     const j = await fn("act", { id, label, noAnswer, reason, note: text });
-    patch(id, fromRow(Object.assign(toRow(l), j.fields || {})));
+    const nl = fromRow(Object.assign(toRow(l), j.fields || {}));
+    S.openCopy = nl; patch(id, nl);
     toast(label ? L("נשמר: ", "Saved: ") + word(label) : L("נשמר", "Saved"));
-    closeLead();
+    renderLead(id, false);
   } catch (e) { toast(e && e.code === "locked" ? (e.by || "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now") : errText(e), true); bs.forEach((b) => { b.disabled = false; }); }
 }
 function toRow(l) {
