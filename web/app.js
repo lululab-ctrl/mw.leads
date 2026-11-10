@@ -144,7 +144,7 @@ function render() {
   document.documentElement.lang = S.lang;
   $("lang").textContent = S.lang === "he" ? "EN" : "עב";
   $("ttl").textContent = L("MWP לידים", "MWP Leads");
-  $("q").placeholder = L("חיפוש שם", "Find a name");
+  $("q").placeholder = L("חיפוש", "Search");
   $("signout").textContent = L("יציאה", "Sign out");
   $("whoName").textContent = S.me ? S.me.name : (S.user ? S.user.email : "");
   renderSignin();
@@ -280,11 +280,11 @@ async function loadFocus() {
 }
 function renderFocusBar(searching, fo, r) {
   const bar = $("focusBar"), head = $("focusHead");
-  bar.hidden = searching || !S.user || !!fo;
+  bar.hidden = !S.user || !!fo; // stays beside the search bar while you type
   head.hidden = !fo;
   if (!bar.hidden) {
-    const h = S.focus.map((f) => '<button type="button" class="fchip" data-focus="' + esc(f.id) + '">★ ' + esc(f.name) + ' <span>' + focusCount(f, r) + '</span></button>').join("") +
-      '<button type="button" class="fchip add" data-act="newfocus">+ ' + L("פוקוס", "Focus") + '</button>';
+    const h = S.focus.map((f) => '<button type="button" class="fchip" data-focus="' + esc(f.id) + '" title="' + esc(f.name) + '"><i>★ ' + esc(f.name) + '</i><span>' + focusCount(f, r) + '</span></button>').join("") +
+      '<button type="button" class="fchip add" data-act="newfocus" aria-label="' + L("פוקוס חדש", "New focus") + '">' + (S.focus.length ? "+" : "+ " + L("פוקוס", "Focus")) + '</button>';
     if (bar.innerHTML !== h) bar.innerHTML = h;
   }
   if (fo) {
