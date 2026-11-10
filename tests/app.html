@@ -38,7 +38,11 @@
       <div id="pwMsg" class="msg" hidden></div>
     </form>
     <input class="search" id="q" type="search" autocomplete="off">
-    <div id="tabs" class="tabs" role="tablist" hidden></div>
+    <div class="tabwrap" id="tabwrap" hidden>
+      <button type="button" class="tarr prev" id="tPrev" aria-label="More tabs" hidden></button>
+      <div id="tabs" class="tabs" role="tablist"></div>
+      <button type="button" class="tarr next" id="tNext" aria-label="More tabs" hidden></button>
+    </div>
     <div id="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
     <button class="later" id="later" type="button" hidden></button>
     <div class="who"><span id="whoName"></span> · <button type="button" id="chpw"></button> · <button type="button" id="signout"></button></div>

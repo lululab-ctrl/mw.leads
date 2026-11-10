@@ -129,7 +129,15 @@ button{cursor:pointer}
 .row.flash .open{outline:3px solid var(--c-new);outline-offset:2px}
 
 /* sections as tabs: plain text, the chosen one underlined (tap to switch instead of scrolling) */
-.tabs{position:sticky;top:0;z-index:2;display:flex;gap:2px;overflow-x:auto;margin:10px 0 12px;background:var(--bg);border-bottom:1px solid var(--line);scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tabwrap{position:sticky;top:0;z-index:2;margin:10px 0 12px;background:var(--bg)}
+.tabs{display:flex;gap:2px;overflow-x:auto;background:var(--bg);border-bottom:1px solid var(--line);scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+.tab{scroll-snap-align:start}
+.tarr{position:absolute;top:0;bottom:1px;width:44px;border:none;font-size:26px;font-weight:700;color:var(--fg);z-index:1;padding:0}
+.tarr.next{inset-inline-end:0;background:linear-gradient(to left,var(--bg) 55%,transparent)}
+.tarr.prev{inset-inline-start:0;background:linear-gradient(to right,var(--bg) 55%,transparent)}
+[dir="rtl"] .tarr.next{background:linear-gradient(to right,var(--bg) 55%,transparent)}
+[dir="rtl"] .tarr.prev{background:linear-gradient(to left,var(--bg) 55%,transparent)}
+#list .sec{scroll-margin-top:70px}
 .tabs::-webkit-scrollbar{display:none}
 .tab{flex:none;position:relative;min-height:46px;border:none;background:none;padding:0 12px;font-weight:500;font-size:16px;white-space:nowrap;color:var(--muted)}
 .tab span{display:inline-block;min-width:22px;margin-inline-start:6px;padding:1px 7px;border-radius:6px;background:var(--card);color:var(--muted);font-size:13px;font-weight:700;line-height:1.5}

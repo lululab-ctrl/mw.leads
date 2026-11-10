@@ -19,7 +19,6 @@ const STM = {}; ST.forEach((s) => { STM[s.k] = s; });
 const LOST = [["Price", "מחיר"], ["Dates", "תאריכים"], ["Not a fit", "לא מתאים"], ["No response", "אין מענה"], ["Other", "אחר"]];
 const OPEN = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed"];
 const S = { tab: 0, lang: "en", leads: new Map(), locks: new Map(), hist: [], hb: 0, q: "", open: null, user: null, me: null, syncing: false, syncAt: 0, metaAt: 0, dbReady: false, err: null, later: false };
-try { const t = +localStorage.getItem("mwpl.tab"); if (t >= 0 && t <= 4) S.tab = t; } catch (_) {}
 try { const sl = localStorage.getItem("mwpl.lang"); S.lang = sl || ((navigator.language || "").slice(0, 2) === "he" ? "he" : "en"); } catch (_) {}
 function L(he, en) { return S.lang === "he" ? he : en; }
 function $(id) { return document.getElementById(id); }
@@ -152,34 +151,25 @@ function render() {
   // an open lead stays open even if it leaves the list (e.g. Won / Lost); it closes on Back
   if (!S.dbReady && !S.leads.size) return;
   const r = rows(), list = $("list"), searching = !!S.q.trim();
-  $("later").hidden = true; // Call later is a tab now
-  // tabs: one per section, plus Call later (Future); search looks through all of them
-  const cnt = [0, 0, 0, 0, 0];
-  if (!searching) r.forEach((l) => { cnt[l._t]++; });
-  const tabs = $("tabs");
-  tabs.hidden = searching || !S.leads.size;
+  $("later").hidden = true; // Call later is its own section (and tab) at the end of the list
+  // one long list with every section, as before; the tabs are shortcuts that jump to a section
+  const names = TABS(), cnt = [0, 0, 0, 0, 0];
+  r.forEach((l) => { cnt[l._t]++; });
+  $("tabwrap").hidden = searching || !S.leads.size;
   if (!searching) {
-    const th = TABS().map((name, i) => '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (S.tab === i ? " on" : "") + '" aria-selected="' + (S.tab === i) + '" data-tab="' + i + '">' + esc(name) + ' <span>' + cnt[i] + '</span></button>').join("");
-    if (tabs.innerHTML !== th) tabs.innerHTML = th;
+    const th = names.map((name, i) => '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (S.tab === i ? " on" : "") + '" aria-selected="' + (S.tab === i) + '" data-tab="' + i + '">' + esc(name) + ' <span>' + cnt[i] + '</span></button>').join("");
+    if ($("tabs").innerHTML !== th) { $("tabs").innerHTML = th; tabArrows(); }
   }
-  const shown = searching ? r : r.filter((l) => l._t === S.tab);
-  if (!shown.length) {
+  if (!r.length) {
     list.innerHTML = '<div class="empty">' + (S.leads.size ? L("אין כאן אף אחד.", "Nobody here.") : (S.syncing ? L("מביאים את הלידים…", "Getting your leads…") : L("אין עדיין לידים. לוחצים על רענון.", "No leads yet. Tap refresh."))) + '</div>';
     render.h = ""; return;
   }
   let html = "", g0 = -1;
-  if (searching) {
-    // search results keep their section headings, so you see where each lead is
-    const names = TABS(), sc = [0, 0, 0, 0, 0];
-    shown.sort((a, b) => a._t - b._t);
-    shown.forEach((l) => { sc[l._t]++; });
-    shown.forEach((l) => {
-      if (l._t !== g0) { html += '<div class="sec' + (l._t === 0 ? " hot" : "") + '">' + names[l._t] + ' <span>' + sc[l._t] + '</span></div>'; g0 = l._t; }
-      html += rowHtml(l);
-    });
-  } else {
-    shown.forEach((l) => { html += rowHtml(l); });
-  }
+  r.sort((a, b) => a._t - b._t);
+  r.forEach((l) => {
+    if (l._t !== g0) { html += '<div class="sec' + (l._t === 0 ? " hot" : "") + '" id="sec-' + l._t + '">' + names[l._t] + ' <span>' + cnt[l._t] + '</span></div>'; g0 = l._t; }
+    html += rowHtml(l);
+  });
   if (render.h !== html) { list.innerHTML = html; render.h = html; }
 }
 async function openLead(id) {
@@ -325,9 +315,38 @@ $("leadBody").addEventListener("click", (ev) => {
 $("q").addEventListener("input", function () { S.q = this.value; draw(); });
 $("tabs").addEventListener("click", (ev) => {
   const b = ev.target.closest("[data-tab]"); if (!b) return;
-  S.tab = +b.dataset.tab; try { localStorage.setItem("mwpl.tab", String(S.tab)); } catch (_) {}
-  render(); window.scrollTo(0, 0);
+  const i = +b.dataset.tab, h = $("sec-" + i);
+  if (!h) { toast(TABS()[i] + L(": אין כאן אף אחד.", ": nobody here.")); return; }
+  setTab(i);
+  window.scrollTo(0, Math.max(0, h.getBoundingClientRect().top + window.scrollY - $("tabwrap").offsetHeight - 6));
+  S.jumpY = window.scrollY; // keep the tapped tab until you scroll away yourself (the end of the list can't reach the top)
 });
+// the underline follows the section you're looking at while you scroll
+function setTab(i) {
+  if (S.tab === i) return;
+  S.tab = i;
+  document.querySelectorAll("#tabs .tab").forEach((t) => { const on = +t.dataset.tab === i; t.classList.toggle("on", on); t.setAttribute("aria-selected", on); if (on) { const bar = $("tabs"), r = t.getBoundingClientRect(), br = bar.getBoundingClientRect(); if (r.left < br.left || r.right > br.right) { bar.scrollLeft += (r.left + r.width / 2) - (br.left + br.width / 2); tabArrows(); } } });
+}
+window.addEventListener("scroll", () => {
+  if ($("tabwrap").hidden || $("home").hidden) return;
+  const y = $("tabwrap").getBoundingClientRect().bottom + 12; let cur = null;
+  document.querySelectorAll("#list .sec").forEach((h) => { if (h.getBoundingClientRect().top <= y) cur = +h.id.slice(4); });
+  if (cur === null) { const f = document.querySelector("#list .sec"); cur = f ? +f.id.slice(4) : 0; }
+  if (S.jumpY != null) { if (Math.abs(window.scrollY - S.jumpY) < 40) return; S.jumpY = null; }
+  setTab(cur);
+}, { passive: true });
+// arrows show there are more tabs (swipe the bar, or tap an arrow)
+function tabArrows() {
+  const t = $("tabs"), rtl = getComputedStyle(t).direction === "rtl";
+  const max = t.scrollWidth - t.clientWidth, pos = Math.abs(t.scrollLeft);
+  $("tPrev").hidden = pos < 4; $("tNext").hidden = pos > max - 4 || max < 4;
+  $("tPrev").textContent = rtl ? "›" : "‹"; $("tNext").textContent = rtl ? "‹" : "›";
+}
+$("tabs").addEventListener("scroll", tabArrows, { passive: true });
+window.addEventListener("resize", tabArrows);
+function slideTabs(dir) { const t = $("tabs"), rtl = getComputedStyle(t).direction === "rtl"; t.scrollLeft += dir * (rtl ? -1 : 1) * t.clientWidth * 0.7; tabArrows(); }
+$("tNext").addEventListener("click", () => slideTabs(1));
+$("tPrev").addEventListener("click", () => slideTabs(-1));
 $("refresh").addEventListener("click", () => sync(true));
 $("lang").addEventListener("click", () => {
   S.lang = S.lang === "he" ? "en" : "he";
