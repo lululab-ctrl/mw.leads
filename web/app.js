@@ -103,9 +103,8 @@ function facts(l) {
   if (f.na >= 3) f.tier = 0;
   f.old = !f.tier && l.status === "New Lead" && (l.created || 0) < now - 14 * 864e5;
   f.score = f.tier ? (5 - f.tier) * 1000 + (f.cbE ? 500 : 0) - f.na * 10 : 0;
-  // no "Done today" section: a lead you worked on stays in its own section (Jeinna/Matan, 10 Nov 2026)
-  f.top = f.open && f.tier > 0;
-  f.g = f.top ? 0 : f.old ? 2 : 1;
+  f.top = f.open && !f.done && f.tier > 0;
+  f.g = f.done ? 3 : f.top ? 0 : f.old ? 2 : 1;
   return f;
 }
 
@@ -133,9 +132,9 @@ function rows() {
 function rowHtml(l) {
   const f = l._f, s = f.old ? { c: "na" } : (STM[l.status] || { c: "future" }), e = tel(l.phone), w = why(l, f);
   const k = lockOf(l.id);
-  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : (w || l.interest || l.source || "");
+  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
   const st = stampText(l);
-  return '<div class="row' + (f.top && w && !k ? " hot" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
+  return '<div class="row' + (f.top && w && !k ? " hot" : "") + (f.done ? " done" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
     '<button type="button" class="open" data-act="open"><span class="av st-' + s.c + '">' + esc((l.name || "?").trim().charAt(0).toUpperCase()) + '</span>' +
     '<span class="txt"><b>' + esc(l.name) + '</b><small>' + esc(line) + '</small>' + (st ? '<small class="stamp">' + esc(st) + '</small>' : "") + '</span></button>' +
     (e && !k ? '<a class="ring" data-act="call" href="tel:' + esc(e) + '" aria-label="' + L("להתקשר", "Call") + '">' + PHONE + '</a>' : '<span class="ring off" aria-hidden="true">' + PHONE + '</span>') + '</div>';
