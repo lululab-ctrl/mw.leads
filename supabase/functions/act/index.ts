@@ -30,6 +30,22 @@ Deno.serve(async (req) => {
     return json({ ok: false, code: "locked", by: lock.by_name }, 409);
   }
 
+  // delete: the lead goes from monday (to monday's Trash, where it can be restored for 30 days) and from this list
+  if (b.delete === true) {
+    try {
+      await monday(`mutation ($i: ID!) { delete_item(item_id: $i) { id } }`, { i: id });
+    } catch (e) {
+      const code = e instanceof MondayError ? e.code : "error";
+      const message = String((e as Error).message);
+      await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "delete", status_from: l.status, note: "Deleted: " + l.name, ok: false, error: code + ": " + message.slice(0, 300) });
+      return json({ ok: false, code, message }, code === "no_token" ? 503 : 502);
+    }
+    await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "delete", status_from: l.status, note: "Deleted: " + l.name + (l.phone ? " · " + l.phone : "") });
+    await db.from("lead_locks").delete().eq("lead_id", id);
+    await db.from("leads").delete().eq("id", id);
+    return json({ ok: true, deleted: true });
+  }
+
   if (noAnswer) text = "No answer" + (text ? "\n" + text : "");
   if (!label && !text) return json({ error: "note_required" }, 400);
 
