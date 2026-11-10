@@ -167,17 +167,18 @@ function render() {
     // your Focus lists come first, in their own colour; then the sections
     const ft = S.focus.map((f) => '<button type="button" role="tab" class="tab focus' + (fo && fo.id === f.id ? " on" : "") + '" aria-selected="' + !!(fo && fo.id === f.id) + '" data-focus="' + esc(f.id) + '" title="' + esc(f.name) + '"><i>★ ' + esc(f.name) + '</i> <span>' + focusCount(f, r) + '</span></button>').join("");
     const nCalls = r.filter(isCall).length, lateCalls = r.filter((l) => isCall(l) && callLate(l)).length;
-    const ct = '<button type="button" role="tab" class="tab calls' + (callsMode ? " on" : "") + (lateCalls ? " late" : "") + '" aria-selected="' + callsMode + '" data-calls="1">📞 ' + L("שיחות", "Calls") + ' <span>' + nCalls + '</span></button>';
-    const th = ct + ft + ORDER.map((i) => [names[i], i]).map(([name, i]) => { const on = !fo && !callsMode && S.tab === i; return '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (on ? " on" : "") + '" aria-selected="' + on + '" data-tab="' + i + '">' + esc(name) + ' <span>' + all[i] + '</span></button>'; }).join("");
+    // Follow-ups sits right after In progress (Jeinna, 10 Nov 2026)
+    const ct = '<button type="button" role="tab" class="tab calls' + (callsMode ? " on" : "") + (lateCalls ? " late" : "") + '" aria-selected="' + callsMode + '" data-calls="1">' + L("פולואפים", "Follow-ups") + ' <span>' + nCalls + '</span></button>';
+    const th = ft + ORDER.map((i) => [names[i], i]).map(([name, i]) => { const on = !fo && !callsMode && S.tab === i; return '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (on ? " on" : "") + '" aria-selected="' + on + '" data-tab="' + i + '">' + esc(name) + ' <span>' + all[i] + '</span></button>' + (i === 1 ? ct : ""); }).join("");
     if ($("tabs").innerHTML !== th) { $("tabs").innerHTML = th; tabArrows(); }
   }
   if (fo) r = r.filter((l) => focusHas(fo, l));
   if (callsMode) {
     r = r.filter(isCall).sort((a, b) => a.fuAt - b.fuAt);
     const head = $("focusHead"); head.hidden = false;
-    const h = '<div class="fh-t">📞 ' + L("שיחות שנקבעו", "Scheduled calls") + ' <span>' + r.length + '</span></div>';
+    const h = '<div class="fh-t">' + L("פולואפים", "Follow-ups") + ' <span>' + r.length + '</span></div>';
     if (head.innerHTML !== h) head.innerHTML = h;
-    list.innerHTML = r.length ? r.map((l) => rowHtml(l, true)).join("") : '<div class="empty">' + L("אין שיחות שנקבעו. קובעים שיחה מתוך ליד.", "No calls scheduled. Schedule one from inside a lead.") + '</div>';
+    list.innerHTML = r.length ? r.map((l) => rowHtml(l, true)).join("") : '<div class="empty">' + L("אין כרגע פולואפים. קובעים שיחת המשך מתוך ליד.", "No follow-ups yet. Schedule a follow-up call from inside a lead.") + '</div>';
     render.h = ""; return;
   }
   const cnt = [0, 0, 0, 0, 0];
