@@ -155,7 +155,8 @@ Deno.serve(async (req) => {
       const { data: sentRows } = await db.from("lead_hist").select("lead_id,text");
       const sent = new Map((sentRows || []).map((r: any) => [r.lead_id, r.text]));
       const todo: { id: string; v: string }[] = [];
-      for (const id of seen) {
+      // every lead on the board, Won and Lost included, so the last step is always there
+      for (const id of new Set(items.map((it: any) => String(it.id)))) {
         const rows = byLead[id];
         if (!rows || !rows.length) continue;
         const v = historyText(rows);
@@ -166,9 +167,22 @@ Deno.serve(async (req) => {
         const q = todo.map((t, i) => `u${i}: change_simple_column_value(board_id: ${BOARD}, item_id: ${t.id}, column_id: "${C.who}", value: $v${i}) { id }`).join("\n");
         const vars: Record<string, string> = {};
         todo.forEach((t, i) => { vars["v" + i] = t.v; });
-        await monday(`mutation (${todo.map((_, i) => "$v" + i + ": String!").join(", ")}) {\n${q}\n}`, vars);
-        await db.from("lead_hist").upsert(todo.map((t) => ({ lead_id: t.id, text: t.v, at: Date.now() })));
-        histSent = todo.length;
+        let done = todo;
+        try {
+          await monday(`mutation (${todo.map((_, i) => "$v" + i + ": String!").join(", ")}) {\n${q}\n}`, vars);
+        } catch (_) {
+          // one bad item (deleted, archived…) must not hold up the rest: one at a time, and a lead that
+          // still fails is marked so it isn't retried every minute until its history changes again
+          done = [];
+          for (const t of todo) {
+            try {
+              await monday(`mutation ($v: String!) { change_simple_column_value(board_id: ${BOARD}, item_id: ${t.id}, column_id: "${C.who}", value: $v) { id } }`, { v: t.v });
+              done.push(t);
+            } catch (e) { console.log("history to monday failed", t.id, String((e as Error).message)); done.push({ id: t.id, v: t.v }); }
+          }
+        }
+        await db.from("lead_hist").upsert(done.map((t) => ({ lead_id: t.id, text: t.v, at: Date.now() })));
+        histSent = done.length;
       }
     } catch (e) { console.log("history to monday skipped", String((e as Error).message)); }
 
