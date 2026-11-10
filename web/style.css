@@ -157,7 +157,9 @@ button{cursor:pointer}
 .secpill.on{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* delete: a small trash button in the bottom corner of an open lead, then "Are you sure?" */
-.trash{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));inset-inline-end:max(16px,env(safe-area-inset-right,0px));width:48px;height:48px;border-radius:50%;border:2px solid var(--line);background:var(--bg);color:var(--muted);display:grid;place-items:center;z-index:6;box-shadow:0 2px 10px rgba(50,51,56,.15)}
+.leadfoot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.leadfoot .mon{align-self:center}
+.trash{flex:none;width:48px;height:48px;border-radius:50%;border:2px solid var(--line);background:var(--bg);color:var(--muted);display:grid;place-items:center}
 .trash svg{width:22px;height:22px}
 .trash:hover,.trash:focus-visible{color:var(--hot);border-color:var(--hot)}
 .dlg{position:fixed;inset:0;z-index:30;background:rgba(50,51,56,.45);display:grid;place-items:center;padding:16px}
@@ -167,4 +169,3 @@ button{cursor:pointer}
 .dlgbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
 .danger{min-height:52px;border-radius:16px;border:none;background:var(--hot);color:#fff;font-weight:900;font-size:16px}
 .danger:disabled{opacity:.6}
-#lead .col{padding-bottom:64px}
