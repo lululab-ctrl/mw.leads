@@ -40,7 +40,7 @@
       updateUser: async (u) => { window.__calls.push({ name: "updateUser", body: { hasPassword: !!u.password, data: u.data } }); return { data: { user: { email: "tester@example.com", user_metadata: u.data } }, error: null }; },
     },
     from: q,
-    rpc: async (name, args) => { window.__calls.push({ name, body: args }); return { data: { ok: true }, error: null }; },
+    rpc: async (name, args) => { window.__calls.push({ name, body: args }); return { data: name === "my_monday" ? { connected: false } : { ok: true }, error: null }; },
     channel() { const c = { on() { return c; }, subscribe(cb) { cb && cb("SUBSCRIBED"); return c; } }; return c; },
   };
   const realFetch = window.fetch;
@@ -50,6 +50,7 @@
       window.__calls.push({ name, body });
       const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
       if (name === "sync") return window.__noToken ? new Response(JSON.stringify({ ok: false, code: "no_token" }), { status: 503 }) : ok({ ok: true, at: Date.now() });
+      if (name === "connect") return body.disconnect ? ok({ ok: true }) : body.token === "bad" ? new Response(JSON.stringify({ ok: false, code: "bad_token" }), { status: 400 }) : ok({ ok: true, connected: true, name: "Jeinna Louise Perez" });
       if (name === "act") {
         const f = { touch: Date.now() };
         let text = (body.note || "").trim(); if (body.noAnswer) text = "No answer" + (text ? "\n" + text : "");

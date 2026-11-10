@@ -34,11 +34,15 @@ Deno.serve(async (req) => {
   if (!label && !text) return json({ error: "note_required" }, 400);
 
   const kind = label ? "status" : noAnswer ? "no_answer" : "note";
+  // the presser's own monday account when connected (monday then shows them as the author);
+  // otherwise the shared token, and the note is signed with their name
+  const { data: mine } = await db.from("monday_tokens").select("token").eq("email", me.email).maybeSingle();
+  const own = mine?.token || undefined;
   const fields: Record<string, unknown> = {};
   let updateId: string | null = null;
   try {
     if (text) {
-      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: noteHtml(text, me.name) });
+      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: own ? "<p>" + text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)).replace(/\n/g, "<br>") + "</p>" : noteHtml(text, me.name) }, own);
       updateId = d?.create_update?.id ? String(d.create_update.id) : null;
       fields.last_t = text.slice(0, 400); fields.last_at = Date.now(); fields.last_by = me.name;
     }
@@ -46,7 +50,7 @@ Deno.serve(async (req) => {
     if (label && label !== l.status) {
       const cols: Record<string, unknown> = { [C.status]: { label } };
       if (reason) cols[C.lost] = { label: reason };
-      await monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) });
+      await monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) }, own);
       fields.status = label;
     }
     if (label) fields.st_at = Date.now();
@@ -65,7 +69,8 @@ Deno.serve(async (req) => {
     if (rows.length) await db.from("lead_updates").upsert(rows);
     return json({ ok: true, fields });
   } catch (e) {
-    const code = e instanceof MondayError ? e.code : "error";
+    let code = e instanceof MondayError ? e.code : "error";
+    if (own && code === "needs_reauth") code = "own_token"; // their own monday connection stopped working
     const message = String((e as Error).message);
     await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind, status_from: l.status, status_to: label, lost_reason: reason, note: text || null, monday_update_id: updateId, ok: false, error: code + ": " + message.slice(0, 300) });
     return json({ ok: false, code, message }, code === "no_token" ? 503 : 502);

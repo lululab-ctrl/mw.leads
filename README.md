@@ -53,6 +53,8 @@ Known quirks kept from the original: the follow-up date is read but not used ("F
 
 ## Team
 
+**Own monday accounts (10 Nov 2026).** monday shows the token's owner as the author. Each person with a monday login connects their own token once (bottom of the list: Connect my monday; checked with monday, kept in `monday_tokens`, readable only by the server functions). Their presses then go to monday under their own name, unsigned. Without a connection (Eliran has no monday login) presses use the shared `MONDAY_API_TOKEN` and notes end with "— Name". The every-minute sync always uses the shared token. MWP Leads doesn't use Make.
+
 **Sign-in: email + password (10 Nov 2026).** No sign-in emails are sent. Jeinna creates each account in Supabase → Authentication → Users → Add user → Create new user (email, a starting password, Auto Confirm User on). After the first sign-in the page asks the person to choose their own password (kept as `user_metadata.own_password`); "Change password" sits at the bottom of the list. A forgotten password: delete the user in Supabase and create it again.
 
 Only the people in the `TEAM` secret can sign in (a trigger refuses any other login). One per line, `email,Name`.
