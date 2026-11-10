@@ -38,6 +38,8 @@
       <div id="pwMsg" class="msg" hidden></div>
     </form>
     <input class="search" id="q" type="search" autocomplete="off">
+    <div class="focusbar" id="focusBar" hidden></div>
+    <div class="focushead" id="focusHead" hidden></div>
     <div class="tabwrap" id="tabwrap" hidden>
       <button type="button" class="tarr prev" id="tPrev" aria-label="More tabs" hidden></button>
       <div id="tabs" class="tabs" role="tablist"></div>
@@ -54,6 +56,20 @@
       <b id="delTtl"></b>
       <p id="delSub"></p>
       <div class="dlgbtns"><button type="button" class="soft" id="delNo"></button><button type="button" class="danger" id="delYes"></button></div>
+    </div>
+  </div>
+  <div class="dlg" id="focusDlg" role="dialog" aria-modal="true" aria-labelledby="fdTtl" hidden>
+    <div class="dlgbox">
+      <b id="fdTtl"></b>
+      <p id="fdSub"></p>
+      <input id="fdName" class="fdin" maxlength="60" autocomplete="off">
+      <span class="fdl" id="fdStL"></span>
+      <div class="fdst" id="fdSt"></div>
+      <span class="fdl" id="fdKwL"></span>
+      <textarea id="fdKw" class="fdin" rows="2"></textarea>
+      <span class="fdcount" id="fdCount"></span>
+      <div id="fdMsg" class="msg bad" hidden></div>
+      <div class="dlgbtns"><button type="button" class="soft" id="fdNo"></button><button type="button" class="dark" id="fdSave"></button></div>
     </div>
   </div>
   <div class="toast" id="toast" hidden><div></div></div>

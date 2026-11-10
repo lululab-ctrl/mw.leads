@@ -18,7 +18,7 @@ const ST = [
 const STM = {}; ST.forEach((s) => { STM[s.k] = s; });
 const LOST = [["Price", "מחיר"], ["Dates", "תאריכים"], ["Not a fit", "לא מתאים"], ["No response", "אין מענה"], ["Other", "אחר"]];
 const OPEN = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed"];
-const S = { tab: 0, lang: "en", leads: new Map(), locks: new Map(), hist: [], hb: 0, q: "", open: null, user: null, me: null, syncing: false, syncAt: 0, metaAt: 0, dbReady: false, err: null, later: false };
+const S = { focus: [], inFocus: null, tab: 0, lang: "en", leads: new Map(), locks: new Map(), hist: [], hb: 0, q: "", open: null, user: null, me: null, syncing: false, syncAt: 0, metaAt: 0, dbReady: false, err: null, later: false };
 try { const sl = localStorage.getItem("mwpl.lang"); S.lang = sl || ((navigator.language || "").slice(0, 2) === "he" ? "he" : "en"); } catch (_) {}
 function L(he, en) { return S.lang === "he" ? he : en; }
 function $(id) { return document.getElementById(id); }
@@ -150,18 +150,23 @@ function render() {
   renderSignin();
   // an open lead stays open even if it leaves the list (e.g. Won / Lost); it closes on Back
   if (!S.dbReady && !S.leads.size) return;
-  const r = rows(), list = $("list"), searching = !!S.q.trim();
+  let r = rows(); const list = $("list"), searching = !!S.q.trim();
+  // Focus: a private, temporary view; only a filter, nothing moves (Matan, 10 Nov 2026)
+  const fo = !searching && S.inFocus ? S.focus.find((f) => f.id === S.inFocus) : null;
+  if (S.inFocus && !fo && S.focusLoaded) { S.inFocus = null; try { localStorage.removeItem("mwpl.focus"); } catch (_) {} }
+  renderFocusBar(searching, fo, r);
+  if (fo) r = r.filter((l) => focusHas(fo, l));
   $("later").hidden = true; // Call later is its own section (and tab) at the end of the list
   // one long list with every section, as before; the tabs are shortcuts that jump to a section
   const names = TABS(), cnt = [0, 0, 0, 0, 0];
   r.forEach((l) => { cnt[l._t]++; });
-  $("tabwrap").hidden = searching || !S.leads.size;
+  $("tabwrap").hidden = searching || !!fo || !S.leads.size;
   if (!searching) {
     const th = ORDER.map((i) => [names[i], i]).map(([name, i]) => '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (S.tab === i ? " on" : "") + '" aria-selected="' + (S.tab === i) + '" data-tab="' + i + '">' + esc(name) + ' <span>' + cnt[i] + '</span></button>').join("");
     if ($("tabs").innerHTML !== th) { $("tabs").innerHTML = th; tabArrows(); }
   }
   if (!r.length) {
-    list.innerHTML = '<div class="empty">' + (S.leads.size ? L("אין כאן אף אחד.", "Nobody here.") : (S.syncing ? L("מביאים את הלידים…", "Getting your leads…") : L("אין עדיין לידים. לוחצים על רענון.", "No leads yet. Tap refresh."))) + '</div>';
+    list.innerHTML = '<div class="empty">' + (fo ? L("אין כרגע לידים בפוקוס הזה. אפשר להוסיף ליד מתוך הליד עצמו, או לערוך את הפוקוס.", "No leads in this focus right now. Add one from inside a lead, or edit the focus.") : S.leads.size ? L("אין כאן אף אחד.", "Nobody here.") : (S.syncing ? L("מביאים את הלידים…", "Getting your leads…") : L("אין עדיין לידים. לוחצים על רענון.", "No leads yet. Tap refresh."))) + '</div>';
     render.h = ""; return;
   }
   let html = "", g0 = -1;
@@ -169,7 +174,7 @@ function render() {
   r.forEach((l) => {
     // with the tabs on top, a section starts with a thin line (its name is read out, not shown twice)
     if (l._t !== g0) {
-      html += searching
+      html += (searching || fo)
         ? '<div class="sec' + (l._t === 0 ? " hot" : "") + '" id="sec-' + l._t + '">' + names[l._t] + ' <span>' + cnt[l._t] + '</span></div>' // search: no tabs, so the names show
         : '<div class="sec divider' + (g0 === -1 ? " first" : "") + '" id="sec-' + l._t + '" role="heading" aria-level="3"><span class="sr">' + names[l._t] + ' ' + cnt[l._t] + '</span></div>';
       g0 = l._t;
@@ -213,6 +218,7 @@ function renderLead(id, fresh) {
     '<div class="q">' + L("מה קרה?", "What happened?") + '</div>' +
     '<div class="two" id="answers"><button type="button" class="big wide st-na" data-na="1">' + L("לא ענה/תה", "No answer") + '</button>' + btns + '</div>' +
     '<div id="lostWhy" hidden><div class="q">Lost reason</div><div class="two" style="margin-top:10px">' + LOST.map((r) => '<button type="button" class="soft" data-lost="' + r[0] + '">' + r[0] + '</button>').join('') + '</div></div>' +
+    focusButtons(l) +
     '<div class="q">' + L("היסטוריה", "History") + '</div><div id="hist" class="hist"></div>' +
     '<div class="leadfoot"><a class="mon" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(l.id) + '">' + L("פתיחה ב-monday", "Open in monday") + '</a>' +
     (S.me && S.me.can_delete ? '<button type="button" class="trash" data-act="delete" aria-label="' + L("מחיקת הליד", "Delete this lead") + '" title="' + L("מחיקת הליד", "Delete this lead") + '">' + TRASH + '</button>' : '') + '</div>'; // only Matan and Jeinna can delete
@@ -255,6 +261,119 @@ function renderHist() {
   el.innerHTML = S.hist.map((h) => '<div class="hi' + (h.bot ? " bot" : "") + '"><div class="ht">' +
     (h.kind === "status" ? '<b>' + L("סטטוס: ", "Status: ") + esc(h.text) + '</b>' : esc(h.text)) +
     '</div><small>' + esc(h.by || "") + ' · ' + esc(when(+h.at)) + (h.source === "app" ? L(" · מהכלי", " · from this app") : L(" · ב-monday", " · in monday")) + '</small></div>').join("");
+}
+
+/* ---------- Focus: a temporary, private view of chosen leads ---------- */
+function focusAuto(f, l) {
+  if ((f.statuses || []).includes(l.status)) return true;
+  const hay = (l.name + " " + (l.interest || "") + " " + (l.source || "") + " " + (l.about || "")).toLowerCase();
+  return (f.keywords || []).some((k) => k && hay.includes(String(k).toLowerCase()));
+}
+function focusHas(f, l) {
+  if ((f.remove_ids || []).includes(l.id)) return false;
+  return (f.add_ids || []).includes(l.id) || focusAuto(f, l);
+}
+function focusCount(f, r) { return r.filter((l) => focusHas(f, l)).length; }
+async function loadFocus() {
+  const { data } = await sb.from("focus_lists").select("*").order("created_at");
+  S.focus = data || []; S.focusLoaded = true; draw();
+}
+function renderFocusBar(searching, fo, r) {
+  const bar = $("focusBar"), head = $("focusHead");
+  bar.hidden = searching || !S.user || !!fo;
+  head.hidden = !fo;
+  if (!bar.hidden) {
+    const h = S.focus.map((f) => '<button type="button" class="fchip" data-focus="' + esc(f.id) + '">★ ' + esc(f.name) + ' <span>' + focusCount(f, r) + '</span></button>').join("") +
+      '<button type="button" class="fchip add" data-act="newfocus">+ ' + L("פוקוס", "Focus") + '</button>';
+    if (bar.innerHTML !== h) bar.innerHTML = h;
+  }
+  if (fo) {
+    const h = '<div class="fh-t">★ ' + esc(fo.name) + ' <span>' + focusCount(fo, r) + '</span></div>' +
+      '<div class="fh-b"><button type="button" class="soft" data-act="focusall">' + L("כל הלידים", "All leads") + '</button>' +
+      '<button type="button" class="soft" data-act="focusedit">' + L("עריכה", "Edit") + '</button>' +
+      '<button type="button" class="soft danger-t" data-act="focusclose">' + L("סגירת הפוקוס", "Close focus") + '</button></div>';
+    if (head.innerHTML !== h) head.innerHTML = h;
+  }
+}
+function enterFocus(id) { S.inFocus = id; try { id ? localStorage.setItem("mwpl.focus", id) : localStorage.removeItem("mwpl.focus"); } catch (_) {} render(); window.scrollTo(0, 0); }
+$("focusBar").addEventListener("click", (ev) => {
+  const c = ev.target.closest("[data-focus]"); if (c) { enterFocus(c.dataset.focus); return; }
+  if (ev.target.closest('[data-act="newfocus"]')) focusDialog(null);
+});
+$("focusHead").addEventListener("click", async (ev) => {
+  const t = ev.target.closest("[data-act]"); if (!t) return;
+  const fo = S.focus.find((f) => f.id === S.inFocus); if (!fo) return;
+  if (t.dataset.act === "focusall") enterFocus(null);
+  if (t.dataset.act === "focusedit") focusDialog(fo);
+  if (t.dataset.act === "focusclose") {
+    if (!confirm(L("לסגור את הפוקוס ״" + fo.name + "״? הלידים נשארים בדיוק איפה שהם.", "Close the focus \u201c" + fo.name + "\u201d? The leads stay exactly where they are."))) return;
+    const { error } = await sb.from("focus_lists").delete().eq("id", fo.id);
+    if (error) { toast(error.message, true); return; }
+    S.focus = S.focus.filter((f) => f.id !== fo.id); enterFocus(null); toast(L("הפוקוס נסגר", "Focus closed"));
+  }
+});
+// create / edit
+const OPEN_ST = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed", "Future"];
+function focusDialog(fo) {
+  S.editFocus = fo ? fo.id : null;
+  $("fdTtl").textContent = fo ? L("עריכת פוקוס", "Edit focus") : L("פוקוס חדש", "New focus");
+  $("fdSub").textContent = L("רק את/ה רואה את הפוקוס. שום ליד לא זז ולא משתכפל: זה רק מבט.", "Only you see this focus. No lead moves or is copied: it's just a view.");
+  $("fdName").placeholder = L("שם, למשל: יפן ונמרי שלג", "Name, e.g. Japan & snow leopards");
+  $("fdName").value = fo ? fo.name : "";
+  $("fdStL").textContent = L("כל הלידים בסטטוס:", "All leads with status:");
+  $("fdSt").innerHTML = OPEN_ST.map((k) => '<label class="fdc"><input type="checkbox" value="' + k + '"' + (fo && fo.statuses.includes(k) ? " checked" : "") + '> ' + esc(L(STM[k].he, STM[k].en)) + '</label>').join("");
+  $("fdKwL").textContent = L("ועוד כל ליד שמזכיר (מופרד בפסיקים):", "Plus any lead that mentions (comma-separated):");
+  $("fdKw").placeholder = "Japan, יפן, snow leopard, נמר השלג, Ladakh, לדאק";
+  $("fdKw").value = fo ? fo.keywords.join(", ") : "";
+  $("fdSave").textContent = L("שמירה", "Save"); $("fdNo").textContent = L("ביטול", "Cancel");
+  $("fdMsg").hidden = true; focusPreview();
+  $("focusDlg").hidden = false; $("fdName").focus();
+}
+function fdValues() {
+  return {
+    name: $("fdName").value.trim().slice(0, 60),
+    statuses: [...$("fdSt").querySelectorAll("input:checked")].map((i) => i.value),
+    keywords: $("fdKw").value.split(/[,\n]/).map((k) => k.trim()).filter(Boolean).slice(0, 30),
+  };
+}
+function focusPreview() {
+  const v = fdValues(), cur = S.focus.find((f) => f.id === S.editFocus) || {};
+  const f = Object.assign({ add_ids: cur.add_ids || [], remove_ids: cur.remove_ids || [] }, v);
+  $("fdCount").textContent = L("לידים בפוקוס עכשיו: ", "Leads in this focus now: ") + focusCount(f, rows());
+}
+$("focusDlg").addEventListener("input", focusPreview);
+$("focusDlg").addEventListener("change", focusPreview);
+$("fdNo").addEventListener("click", () => { $("focusDlg").hidden = true; });
+$("fdSave").addEventListener("click", async () => {
+  const v = fdValues(), m = $("fdMsg");
+  if (!v.name) { m.hidden = false; m.textContent = L("צריך שם לפוקוס.", "The focus needs a name."); return; }
+  $("fdSave").disabled = true;
+  const q = S.editFocus ? sb.from("focus_lists").update(Object.assign({ updated_at: new Date().toISOString() }, v)).eq("id", S.editFocus).select().single()
+    : sb.from("focus_lists").insert(v).select().single();
+  const { data, error } = await q;
+  $("fdSave").disabled = false;
+  if (error) { m.hidden = false; m.textContent = error.message; return; }
+  S.focus = S.focus.filter((f) => f.id !== data.id).concat([data]);
+  $("focusDlg").hidden = true; enterFocus(data.id);
+});
+// add / remove one lead by hand (from inside the lead)
+function focusButtons(l) {
+  if (!S.focus.length) return "";
+  return '<div class="ffoc">' + S.focus.map((f) => {
+    const inIt = focusHas(f, l);
+    return '<button type="button" class="soft fbtn' + (inIt ? " in" : "") + '" data-ffoc="' + esc(f.id) + '">★ ' + esc(f.name) + ' · ' + (inIt ? L("בפוקוס ✓ (להסרה)", "in focus ✓ (remove)") : L("להוספה", "add")) + '</button>';
+  }).join("") + '</div>';
+}
+async function toggleFocus(fid) {
+  const f = S.focus.find((x) => x.id === fid), id = S.open, l = S.leads.get(id) || S.openCopy; if (!f || !l) return;
+  const add = new Set(f.add_ids || []), rem = new Set(f.remove_ids || []);
+  if (focusHas(f, l)) { add.delete(id); if (focusAuto(f, l)) rem.add(id); }
+  else { rem.delete(id); if (!focusAuto(f, l)) add.add(id); }
+  const { data, error } = await sb.from("focus_lists").update({ add_ids: [...add], remove_ids: [...rem], updated_at: new Date().toISOString() }).eq("id", fid).select().single();
+  if (error) { toast(error.message, true); return; }
+  S.focus = S.focus.map((x) => (x.id === fid ? data : x));
+  const el = document.querySelector('.ffoc'); if (el) el.outerHTML = focusButtons(l);
+  toast(focusHas(data, l) ? L("נוסף לפוקוס", "Added to the focus") : L("הוסר מהפוקוס", "Removed from the focus"));
 }
 
 /* ---------- delete a lead (here and in monday), after "Are you sure?" ---------- */
@@ -343,13 +462,14 @@ $("list").addEventListener("click", (ev) => {
   openLead(row.dataset.id);
 });
 $("leadBody").addEventListener("click", (ev) => {
-  const t = ev.target.closest("[data-act],[data-st],[data-na],[data-lost]"); if (!t) return;
+  const t = ev.target.closest("[data-act],[data-st],[data-na],[data-lost],[data-ffoc]"); if (!t) return;
   if (t.dataset.lost) { finish("Lost", false, t.dataset.lost); return; }
   if (t.dataset.st === "Lost") { const w = $("lostWhy"); w.hidden = false; w.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
   if (t.dataset.st) { finish(t.dataset.st, false); return; }
   if (t.dataset.na) { finish(null, true); return; }
   if (t.dataset.act === "back") { closeLead(); return; }
   if (t.dataset.act === "delete") { askDelete(); return; }
+  if (t.dataset.ffoc) { toggleFocus(t.dataset.ffoc); return; }
   if (t.dataset.act === "noteonly") { finish(null, false); return; }
   if (t.dataset.act === "copy") {
     const v = t.dataset.v;
@@ -514,7 +634,8 @@ async function start(user) {
   const { data: me } = await sb.from("team").select("name,email,can_delete").eq("email", (user.email || "").toLowerCase()).maybeSingle();
   S.me = me || null;
   if (!me) { S.dbReady = true; banner(L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list."), ""); render(); return; }
-  await Promise.all([loadAll(), loadMeta(), loadLocks()]);
+  try { S.inFocus = localStorage.getItem("mwpl.focus") || null; } catch (_) {}
+  await Promise.all([loadAll(), loadMeta(), loadLocks(), loadFocus()]);
   // a lead that was open before a refresh opens again
   let was = null; try { was = localStorage.getItem("mwpl.open"); } catch (_) {}
   if (was && S.leads.has(was)) openLead(was); else if (was) { try { localStorage.removeItem("mwpl.open"); } catch (_) {} }
@@ -524,6 +645,7 @@ async function start(user) {
       draw();
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sync_meta" }, (p) => { S.metaAt = +p.new.at || 0; setSync(); })
+    .on("postgres_changes", { event: "*", schema: "public", table: "focus_lists" }, () => { loadFocus(); })
     .on("postgres_changes", { event: "*", schema: "public", table: "lead_locks" }, (p) => {
       if (p.eventType === "DELETE") S.locks.delete(p.old.lead_id); else if (p.new) S.locks.set(p.new.lead_id, p.new);
       draw();

@@ -15,7 +15,22 @@
     { id: "8", name: "New Today", status: "New Lead", phone: "0541112236", created: day.getTime() + 1000, na: 3 },
   ].map((r) => Object.assign({ email: "", source: "Website Form", interest: "", about: "", lang: "", fu_date: "", ecb: 0, mcb: 0, ret: 0, na: 0, last_t: null, last_at: 0, last_by: "", st_at: 0, touch: 0 }, r));
   window.__calls = [];
+  window.__focus = [];
+  const fq = () => {
+    let op = "select", vals = null, id = null;
+    const done = () => {
+      if (op === "insert") { const r = Object.assign({ id: "f" + (window.__focus.length + 1) + Date.now(), add_ids: [], remove_ids: [], created_at: new Date().toISOString() }, vals); window.__focus.push(r); return { data: r, error: null }; }
+      if (op === "update") { const r = window.__focus.find((f) => f.id === id); Object.assign(r, vals); return { data: r, error: null }; }
+      if (op === "delete") { window.__focus = window.__focus.filter((f) => f.id !== id); return { data: null, error: null }; }
+      return { data: window.__focus.slice(), error: null };
+    };
+    const a = { select() { return a; }, order() { return a; }, single() { return Promise.resolve(done()); },
+      insert(v) { op = "insert"; vals = v; return a; }, update(v) { op = "update"; vals = v; return a; }, delete() { op = "delete"; return a; },
+      eq(k, v) { id = v; return a; }, then(ok, bad) { return Promise.resolve(done()).then(ok, bad); } };
+    return a;
+  };
   const q = (table) => {
+    if (table === "focus_lists") return fq();
     const st = { table, eqv: null };
     const res = () => {
       if (table === "leads") return { data: rows.slice(), error: null };
