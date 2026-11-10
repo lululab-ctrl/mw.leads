@@ -105,7 +105,7 @@ function histWho(h, all) {
 }
 function facts(l) {
   /* Order: 1 asked us to call (Meta form in the past week, or the email button), 2 came back again, 3 new by date (past week, never contacted), 4 follow-up due. Old = New Lead for over two weeks. */
-  const now = Date.now(), t0 = dayStart(), noteAt = (l.last && l.last.at) || 0, W = 7 * 864e5;
+  const now = Date.now(), t0 = dayStart(), noteAt = (l.last && isPerson(l.last.by) && l.last.at) || 0, W = 7 * 864e5; // a note by Claude or an automation isn't contact
   // a status change by a person handles the lead too, not only a note (Jeinna, 11 Nov 2026): it leaves
   // Call first and comes back only if the lead does something new. Claude and automations don't count.
   const stBy = /^Status/.test(l.changedWhat || "") && isPerson(l.changedBy) ? (l.changedAt || 0) : 0;
@@ -114,7 +114,7 @@ function facts(l) {
     ret: !!(l.ret && l.ret > lastAt && l.ret > now - W),
     fresh: l.status === "New Lead" && (l.created || 0) > now - W,
     due: !!(l.fuDate && l.fuDate <= iso(new Date())),
-    done: lastAt >= t0 || (l.stAt || 0) >= t0, open: OPEN.indexOf(l.status) >= 0, na: l.na || 0 };
+    done: lastAt >= t0, open: OPEN.indexOf(l.status) >= 0, na: l.na || 0 };
   f.cb = f.cbE || f.cbM;
   f.tier = f.cb ? 1 : f.ret ? 2 : f.fresh ? 3 : 0;
   if (f.na >= 3) f.tier = 0;
