@@ -4,8 +4,8 @@
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
 import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
 
-const COLS = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate];
-const ITEM_FIELDS = `id name created_at group { id } column_values(ids: ${JSON.stringify(COLS)}) { id text }`;
+const COLS = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate, C.fu];
+const ITEM_FIELDS = `id name created_at group { id } column_values(ids: ${JSON.stringify(COLS)}) { id text value }`;
 
 function iso(d: Date) { return d.toISOString().slice(0, 10); }
 

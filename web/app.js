@@ -58,7 +58,8 @@ function fromRow(r) {
     about: r.about, lang: r.lang, fuDate: r.fu_date, created: +r.created || 0, ecb: +r.ecb || 0, mcb: +r.mcb || 0,
     ret: +r.ret || 0, na: r.na || 0, last: r.last_t ? { t: r.last_t, at: +r.last_at || 0, by: r.last_by || "" } : null,
     stAt: +r.st_at || 0, touch: +r.touch || 0,
-    changedBy: r.changed_by || "", changedAt: +r.changed_at || 0, changedWhat: r.changed_what || "" };
+    changedBy: r.changed_by || "", changedAt: +r.changed_at || 0, changedWhat: r.changed_what || "",
+    fuAt: +r.fu_at || 0, fuState: r.fu_state || "" };
 }
 
 /* ---------- stamps and locks ---------- */
@@ -129,12 +130,13 @@ function rows() {
   out.sort((a, b) => a._f.g - b._f.g || b._f.score - a._f.score || (b.created || 0) - (a.created || 0));
   return out;
 }
-function rowHtml(l) {
+function rowHtml(l, callRow) {
   const f = l._f, s = f.old ? { c: "na" } : (STM[l.status] || { c: "future" }), e = tel(l.phone), w = why(l, f);
   const k = lockOf(l.id);
-  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
+  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : callRow ? "📞 " + callShort(l.fuAt) + (l.fuAt < Date.now() ? L(" · עבר הזמן", " · overdue") : "") : f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
   const st = stampText(l);
-  return '<div class="row' + (f.top && w && !k ? " hot" : "") + (f.done ? " done" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
+  const cls = callRow ? (l.fuAt < Date.now() ? " callrow late" : new Date(l.fuAt).toDateString() === new Date().toDateString() ? " callrow today" : " callrow") : "";
+  return '<div class="row' + cls + (f.top && w && !k && !callRow ? " hot" : "") + (f.done ? " done" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
     '<button type="button" class="open" data-act="open"><span class="av st-' + s.c + '">' + esc((l.name || "?").trim().charAt(0).toUpperCase()) + '</span>' +
     '<span class="txt"><b>' + esc(l.name) + '</b><small>' + esc(line) + '</small>' + (st ? '<small class="stamp">' + esc(st) + '</small>' : "") + '</span></button>' +
     (e && !k ? '<a class="ring" data-act="call" href="tel:' + esc(e) + '" aria-label="' + L("להתקשר", "Call") + '">' + PHONE + '</a>' : '<span class="ring off" aria-hidden="true">' + PHONE + '</span>') + '</div>';
@@ -152,8 +154,9 @@ function render() {
   if (!S.dbReady && !S.leads.size) return;
   let r = rows(); const list = $("list"), searching = !!S.q.trim();
   // Focus: a private, temporary view; only a filter, nothing moves (Matan, 10 Nov 2026)
-  const fo = !searching && S.inFocus ? S.focus.find((f) => f.id === S.inFocus) : null;
-  if (S.inFocus && !fo && S.focusLoaded) { S.inFocus = null; try { localStorage.removeItem("mwpl.focus"); } catch (_) {} }
+  const callsMode = !searching && S.inFocus === "__calls"; // the Calls tab: scheduled follow-up calls
+  const fo = !searching && S.inFocus && !callsMode ? S.focus.find((f) => f.id === S.inFocus) : null;
+  if (S.inFocus && !fo && !callsMode && S.focusLoaded) { S.inFocus = null; try { localStorage.removeItem("mwpl.focus"); } catch (_) {} }
   renderFocusBar(searching, fo, r);
   $("later").hidden = true; // Call later is its own section (and tab) at the end of the list
   // one long list with every section, as before; the tabs are shortcuts that jump to a section
@@ -163,10 +166,20 @@ function render() {
   if (!searching) {
     // your Focus lists come first, in their own colour; then the sections
     const ft = S.focus.map((f) => '<button type="button" role="tab" class="tab focus' + (fo && fo.id === f.id ? " on" : "") + '" aria-selected="' + !!(fo && fo.id === f.id) + '" data-focus="' + esc(f.id) + '" title="' + esc(f.name) + '"><i>★ ' + esc(f.name) + '</i> <span>' + focusCount(f, r) + '</span></button>').join("");
-    const th = ft + ORDER.map((i) => [names[i], i]).map(([name, i]) => { const on = !fo && S.tab === i; return '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (on ? " on" : "") + '" aria-selected="' + on + '" data-tab="' + i + '">' + esc(name) + ' <span>' + all[i] + '</span></button>'; }).join("");
+    const nCalls = r.filter(isCall).length, lateCalls = r.filter((l) => isCall(l) && l.fuAt < Date.now()).length;
+    const ct = '<button type="button" role="tab" class="tab calls' + (callsMode ? " on" : "") + (lateCalls ? " late" : "") + '" aria-selected="' + callsMode + '" data-calls="1">📞 ' + L("שיחות", "Calls") + ' <span>' + nCalls + '</span></button>';
+    const th = ct + ft + ORDER.map((i) => [names[i], i]).map(([name, i]) => { const on = !fo && !callsMode && S.tab === i; return '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (on ? " on" : "") + '" aria-selected="' + on + '" data-tab="' + i + '">' + esc(name) + ' <span>' + all[i] + '</span></button>'; }).join("");
     if ($("tabs").innerHTML !== th) { $("tabs").innerHTML = th; tabArrows(); }
   }
   if (fo) r = r.filter((l) => focusHas(fo, l));
+  if (callsMode) {
+    r = r.filter(isCall).sort((a, b) => a.fuAt - b.fuAt);
+    const head = $("focusHead"); head.hidden = false;
+    const h = '<div class="fh-t">📞 ' + L("שיחות שנקבעו", "Scheduled calls") + ' <span>' + r.length + '</span></div>';
+    if (head.innerHTML !== h) head.innerHTML = h;
+    list.innerHTML = r.length ? r.map((l) => rowHtml(l, true)).join("") : '<div class="empty">' + L("אין שיחות שנקבעו. קובעים שיחה מתוך ליד.", "No calls scheduled. Schedule one from inside a lead.") + '</div>';
+    render.h = ""; return;
+  }
   const cnt = [0, 0, 0, 0, 0];
   r.forEach((l) => { cnt[l._t]++; });
   if (!r.length) {
@@ -193,7 +206,7 @@ async function openLead(id) {
   if (k) { toast(k.by_name + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now"), true); return; }
   const c = await claim(id);
   if (!c.ok) { toast((c.by || "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now"), true); return; }
-  S.open = id; S.hist = []; S.openCopy = l;
+  S.open = id; S.hist = []; S.openCopy = l; S.tplLang = null;
   try { localStorage.setItem("mwpl.open", id); } catch (_) {} // a refresh opens it again; only Close forgets it
   // where the list was and which section the lead was in, to come back to the same place on Close
   S.listY = window.scrollY; S.openSec = secOf(id);
@@ -216,6 +229,7 @@ function renderLead(id, fresh) {
     (e ? '<a class="giant" href="tel:' + esc(e) + '">' + PHONE + '<span>' + L("להתקשר", "Call") + '<small>' + esc(telShow(e)) + '</small></span></a>' : '<div class="giant off">' + L("אין מספר טלפון", "No phone number") + '</div>') +
     (e ? '<div class="two"><a class="soft" target="_blank" rel="noopener" href="https://wa.me/' + esc(e.slice(1)) + '">WhatsApp</a><button type="button" class="soft" data-act="copy" data-v="' + esc(telShow(e)) + '">' + L("העתקת מספר", "Copy number") + '</button></div>' : "") +
     (l.changedBy ? '<div class="stampbig">' + esc(stampText(l)) + '</div>' : "") +
+    callBlock(l) +
     (l.last && l.last.t ? '<div class="lastn">' + esc(l.last.t) + '<small>' + esc(l.last.by || "") + ' · ' + esc(when(l.last.at)) + '</small></div>' : "") +
     '<textarea id="noteBox" dir="auto" placeholder="' + L("לכתוב הערה (לא חובה)", "Write a note (optional)") + '"></textarea>' +
     '<button type="button" class="dark" data-act="noteonly">' + L("לשמור רק את ההערה", "Save the note only") + '</button>' +
@@ -263,7 +277,7 @@ function renderHist() {
   const el = $("hist"); if (!el) return;
   if (!S.hist.length) { el.innerHTML = '<div class="hi muted">' + L("אין עדיין היסטוריה.", "No history yet.") + '</div>'; return; }
   el.innerHTML = S.hist.map((h) => '<div class="hi' + (h.bot ? " bot" : "") + '"><div class="ht">' +
-    (h.kind === "status" ? '<b>' + L("סטטוס: ", "Status: ") + esc(h.text) + '</b>' : esc(h.text)) +
+    (h.kind === "status" ? '<b>' + L("סטטוס: ", "Status: ") + esc(h.text) + '</b>' : h.kind === "call" ? '<b>📞 ' + (h.text === "done" ? L("השיחה התקיימה", "Call done") : L("שיחה נקבעה: ", "Call scheduled: ") + esc(h.text)) + '</b>' : esc(h.text)) +
     '</div><small>' + esc(h.by || "") + ' · ' + esc(when(+h.at)) + (h.source === "app" ? L(" · מהכלי", " · from this app") : L(" · ב-monday", " · in monday")) + '</small></div>').join("");
 }
 
@@ -383,6 +397,141 @@ async function toggleFocus(fid) {
   toast(focusHas(data, l) ? L("נוסף לפוקוס", "Added to the focus") : L("הוסר מהפוקוס", "Removed from the focus"));
 }
 
+/* ---------- follow-up calls: schedule, invite, done ---------- */
+// TEMPLATES ARE DRAFTS until Matan approves them (customer-facing). Placeholders: {first} {name} {sender} {when} {about}
+const TPL = {
+  wa: {
+    en: "Hi {first},\nIt's {sender} from MW Photo Tours. As we agreed, let's talk by phone on {when}{about}.\nIf another time works better, just reply here and we'll find one.\nSpeak soon,\n{sender}",
+    he: "היי {first},\nכאן {sender} מ-MW Photo Tours. כמו שסיכמנו, נדבר בטלפון ב{when}{about}.\nאם זמן אחר נוח יותר, אפשר לכתוב לי כאן ונמצא זמן.\nנדבר,\n{sender}",
+  },
+  subject: { en: "Our call on {when}", he: "השיחה שלנו ב{when}" },
+  mailIntro: { en: "Thanks for your interest{about}. As we agreed, I'll call you on:", he: "תודה על ההתעניינות{about}. כמו שסיכמנו, אתקשר בזמן הזה:" },
+  mailAfter: { en: "If that time no longer works, just reply to this email and we'll find another.", he: "אם הזמן הזה כבר לא מתאים, אפשר פשוט להשיב למייל הזה ונמצא זמן אחר." },
+  mailBtn: { en: "Add to my calendar", he: "להוסיף ליומן שלי" },
+  hi: { en: "Hi {first},", he: "היי {first}," },
+  bye: { en: "Speak soon,", he: "נדבר," },
+  aboutWa: { en: " about {interest}", he: " על {interest}" },
+  aboutMail: { en: " in {interest}", he: " ב{interestHe}" },
+  calTitle: { en: "MW Photo Tours · call with {name}", he: "MW Photo Tours · שיחה עם {name}" },
+  calTitleClient: { en: "Call with MW Photo Tours", he: "שיחה עם MW Photo Tours" },
+};
+const SENDER_HE = { Matan: "מתן", Emilia: "אמיליה", Eliran: "אלירן", Jeinna: "ג׳ינה" };
+const VAGUE_INTEREST = /not decided|not sure|עוד לא|field guides|newsletter/i;
+function callWhen(ms, lang) {
+  const d = new Intl.DateTimeFormat(lang === "he" ? "he-IL" : "en-GB", { timeZone: "Asia/Jerusalem", weekday: "long", day: "numeric", month: "long" }).format(new Date(ms));
+  const t = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
+  return lang === "he" ? d + ", בשעה " + t + " (שעון ישראל)" : d + " at " + t + " (Israel time)";
+}
+function callShort(ms) {
+  return new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", { timeZone: "Asia/Jerusalem", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
+}
+function tplVars(l, lang) {
+  const first = String(l.name || "").trim().split(/\s+/)[0] || "";
+  const me = (S.me && S.me.name) || "";
+  const interest = l.interest && !VAGUE_INTEREST.test(l.interest) ? l.interest : "";
+  // Hebrew "ב" joins a Hebrew word directly ("בטיגריסים") and takes a hyphen before English ("ב-Snow leopards")
+  const interestHe = interest ? (/^[\u0590-\u05FF]/.test(interest) ? interest : "-" + interest) : "";
+  return { first, name: l.name || "", sender: lang === "he" ? (SENDER_HE[me] || me) : me, when: callWhen(l.fuAt, lang), interest, interestHe };
+}
+function fill(t, v) { return t.replace(/\{(\w+)\}/g, (_, k) => (v[k] == null ? "" : v[k])); }
+function waText(l, lang) { const v = tplVars(l, lang); v.about = v.interest ? fill(TPL.aboutWa[lang], v) : ""; return fill(TPL.wa[lang], v); }
+function gcalDates(ms) { const f = (x) => new Date(x).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""); return f(ms) + "/" + f(ms + 30 * 60000); }
+function gcalLink(l, lang, forClient) {
+  const v = tplVars(l, lang), p = new URLSearchParams();
+  p.set("action", "TEMPLATE");
+  p.set("text", fill(forClient ? TPL.calTitleClient[lang] : TPL.calTitle[lang], v));
+  p.set("dates", gcalDates(l.fuAt));
+  p.set("ctz", "Asia/Jerusalem");
+  if (!forClient) {
+    p.set("details", [l.phone ? "Phone: " + l.phone : "", l.interest ? "Interested in: " + l.interest : "", "MWP Leads: https://lululab-ctrl.github.io/mw.leads/"].filter(Boolean).join("\n"));
+    if (l.email && /@/.test(l.email)) p.set("add", l.email);
+  }
+  return "https://calendar.google.com/calendar/render?" + p.toString();
+}
+function mailSubject(l, lang) { return fill(TPL.subject[lang], tplVars(l, lang)); }
+function mailHtml(l, lang) {
+  const v = tplVars(l, lang), he = lang === "he", dir = he ? "rtl" : "ltr", al = he ? "right" : "left";
+  v.about = v.interest ? fill(TPL.aboutMail[lang], v) : "";
+  const e = (x) => esc(x);
+  return '<div dir="' + dir + '" style="font-family:Arial,Helvetica,sans-serif;background:#EEEBE4;padding:20px 10px;text-align:' + al + '">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#FEFBF1;border-radius:14px;color:#12313A">' +
+    '<tr><td style="padding:16px 24px;border-bottom:1px solid #E2DCCF;font-size:16px;letter-spacing:.04em" dir="ltr">MW Photo Tours</td></tr>' +
+    '<tr><td style="padding:22px 24px 6px;font-size:16px;line-height:1.6">' + e(fill(TPL.hi[lang], v)) + '<br><br>' + e(fill(TPL.mailIntro[lang], v)) + '</td></tr>' +
+    '<tr><td style="padding:10px 24px"><div style="background:#12313A;color:#FEFBF1;border-radius:12px;padding:16px 18px;font-size:18px;font-weight:bold">' + e(callWhen(l.fuAt, lang)) + '</div></td></tr>' +
+    '<tr><td style="padding:8px 24px 4px;font-size:15px;line-height:1.6">' + e(TPL.mailAfter[lang]) + '</td></tr>' +
+    '<tr><td style="padding:12px 24px"><a href="' + e(gcalLink(l, lang, true)) + '" style="display:inline-block;background:#E4AA7C;color:#12313A;text-decoration:none;font-weight:bold;padding:10px 18px;border-radius:8px">' + e(TPL.mailBtn[lang]) + '</a></td></tr>' +
+    '<tr><td style="padding:14px 24px 22px;font-size:15px;line-height:1.6">' + e(TPL.bye[lang]) + '<br>' + e(v.sender) + '<br><span style="color:#3C535E">MW Photo Tours · <a href="https://mw-phototours.com/" style="color:#24525B">mw-phototours.com</a></span></td></tr>' +
+    '</table></div>';
+}
+function mailPlain(l, lang) {
+  const v = tplVars(l, lang); v.about = v.interest ? fill(TPL.aboutMail[lang], v) : "";
+  return [fill(TPL.hi[lang], v), "", fill(TPL.mailIntro[lang], v), callWhen(l.fuAt, lang), "", TPL.mailAfter[lang], "", TPL.mailBtn[lang] + ": " + gcalLink(l, lang, true), "", TPL.bye[lang], v.sender, "MW Photo Tours · mw-phototours.com"].join("\n");
+}
+async function copyText(t) { try { await navigator.clipboard.writeText(t); toast(L("הועתק", "Copied")); } catch (_) { toast(L("ההעתקה לא עבדה", "Couldn't copy"), true); } }
+async function copyHtml(html, plain) {
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([plain], { type: "text/plain" }) })]);
+    toast(L("המייל הועתק. מדביקים בגוף המייל ב-Gmail.", "Email copied. Paste it into the body of a Gmail message."));
+  } catch (_) {
+    const d = document.createElement("div"); d.contentEditable = "true"; d.innerHTML = html; d.style.cssText = "position:absolute;left:-9999px"; document.body.appendChild(d);
+    const r = document.createRange(); r.selectNodeContents(d); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    const ok = document.execCommand("copy"); sel.removeAllRanges(); d.remove();
+    toast(ok ? L("המייל הועתק", "Email copied") : L("ההעתקה לא עבדה", "Couldn't copy"), !ok);
+  }
+}
+function leadLang(l) { return S.tplLang || (/hebrew/i.test(l.lang || "") || /[\u0590-\u05FF]/.test(l.name || "") ? "he" : "en"); }
+function callBlock(l) {
+  if (!l.fuAt || l.fuState === "Done") return '<button type="button" class="soft schedule" data-act="schedule">📅 ' + L("לקבוע שיחה", "Schedule a call") + '</button>';
+  const lang = leadLang(l), late = l.fuAt < Date.now(), today = new Date(l.fuAt).toDateString() === new Date().toDateString();
+  return '<div class="callcard' + (late ? " late" : today ? " today" : "") + '">' +
+    '<div class="cc-t">📞 ' + L("שיחה: ", "Call: ") + esc(callShort(l.fuAt)) + (late ? ' <span>' + L("· עבר הזמן", "· overdue") + '</span>' : "") + '</div>' +
+    '<div class="cc-l"><span>' + L("שפת ההודעה:", "Message language:") + '</span> <button type="button" class="lng' + (lang === "en" ? " on" : "") + '" data-tpl="en">English</button><button type="button" class="lng' + (lang === "he" ? " on" : "") + '" data-tpl="he">עברית</button></div>' +
+    '<div class="cc-g">' +
+    (l.email && /@/.test(l.email) ? '<a class="soft" target="_blank" rel="noopener" href="' + esc(gcalLink(l, lang, false)) + '">' + L("הזמנה ביומן (מייל)", "Calendar invite (email)") + '</a>' : '<a class="soft" target="_blank" rel="noopener" href="' + esc(gcalLink(l, lang, false)) + '">' + L("להוסיף ליומן שלי", "Add to my calendar") + '</a>') +
+    (tel(l.phone) ? '<a class="soft" target="_blank" rel="noopener" href="https://wa.me/' + esc(tel(l.phone).slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + L("לשלוח בוואטסאפ", "Send on WhatsApp") + '</a>' : '') +
+    '<button type="button" class="soft" data-act="copywa">' + L("העתקת הודעת וואטסאפ", "Copy WhatsApp message") + '</button>' +
+    '<button type="button" class="soft" data-act="copymail">' + L("העתקת המייל", "Copy email") + '</button>' +
+    '<button type="button" class="soft" data-act="copysubj">' + L("העתקת נושא המייל", "Copy email subject") + '</button>' +
+    '</div>' +
+    '<div class="cc-g two2"><button type="button" class="soft" data-act="schedule">' + L("לשנות מועד", "Reschedule") + '</button><button type="button" class="soft" data-act="calldone">' + L("השיחה התקיימה ✓", "Call done ✓") + '</button></div>' +
+    '</div>';
+}
+function scheduleDialog() {
+  const l = S.leads.get(S.open) || S.openCopy; if (!l) return;
+  const now = new Date(Date.now() + 864e5), d = l.fuAt && l.fuState !== "Done" ? new Date(l.fuAt) : now;
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d);
+  const g = (t) => (parts.find((x) => x.type === t) || {}).value;
+  $("cdTtl").textContent = L("שיחה עם ", "Call with ") + (l.name || "");
+  $("cdSub").textContent = L("שעון ישראל. נשמר ב-monday בעמודות Follow Up Date ו-Follow Up.", "Israel time. Saved in monday's Follow Up Date and Follow Up columns.");
+  $("cdDate").value = g("year") + "-" + g("month") + "-" + g("day");
+  $("cdTime").value = l.fuAt && l.fuState !== "Done" ? g("hour") + ":" + g("minute") : "10:00";
+  $("cdNote").value = ""; $("cdNote").placeholder = L("הערה (לא חובה)", "Note (optional)");
+  $("cdSave").textContent = L("שמירה", "Save"); $("cdNo").textContent = L("ביטול", "Cancel"); $("cdMsg").hidden = true;
+  $("callDlg").hidden = false;
+}
+$("cdNo").addEventListener("click", () => { $("callDlg").hidden = true; });
+$("cdSave").addEventListener("click", async () => {
+  const id = S.open, l = S.leads.get(id) || S.openCopy, m = $("cdMsg"); if (!l) return;
+  const date = $("cdDate").value, time = $("cdTime").value;
+  if (!date || !time) { m.hidden = false; m.textContent = L("צריך תאריך ושעה.", "Pick a date and a time."); return; }
+  $("cdSave").disabled = true;
+  try {
+    const j = await fn("act", { id, schedule: { date, time, note: $("cdNote").value } });
+    const nl = fromRow(Object.assign(toRow(l), j.fields || {})); S.openCopy = nl; patch(id, nl);
+    $("callDlg").hidden = true; toast(L("השיחה נקבעה", "Call scheduled")); renderLead(id, false); loadHist(id);
+  } catch (e) { m.hidden = false; m.textContent = e && e.code === "bad_time" ? L("המועד לא תקין.", "That date or time doesn't look right.") : errText(e); }
+  $("cdSave").disabled = false;
+});
+async function callDone() {
+  const id = S.open, l = S.leads.get(id) || S.openCopy; if (!l) return;
+  try {
+    const j = await fn("act", { id, callDone: true });
+    const nl = fromRow(Object.assign(toRow(l), j.fields || {})); S.openCopy = nl; patch(id, nl);
+    toast(L("סומן: השיחה התקיימה", "Marked: call done")); renderLead(id, false); loadHist(id);
+  } catch (e) { toast(errText(e), true); }
+}
+function isCall(l) { return !!l.fuAt && l.fuState !== "Done"; }
+
 /* ---------- delete a lead (here and in monday), after "Are you sure?" ---------- */
 const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
 function askDelete() {
@@ -445,7 +594,8 @@ async function finish(label, noAnswer, reason) {
 function toRow(l) {
   return { id: l.id, name: l.name, status: l.status, phone: l.phone, email: l.email, source: l.source, interest: l.interest, about: l.about,
     lang: l.lang, fu_date: l.fuDate, created: l.created, ecb: l.ecb, mcb: l.mcb, ret: l.ret, na: l.na,
-    last_t: l.last ? l.last.t : null, last_at: l.last ? l.last.at : 0, last_by: l.last ? l.last.by : "", st_at: l.stAt, touch: l.touch };
+    last_t: l.last ? l.last.t : null, last_at: l.last ? l.last.at : 0, last_by: l.last ? l.last.by : "", st_at: l.stAt, touch: l.touch,
+    changed_by: l.changedBy, changed_at: l.changedAt, changed_what: l.changedWhat, fu_at: l.fuAt, fu_state: l.fuState };
 }
 function patch(id, l) { l.id = id; S.leads.set(id, l); draw(); }
 
@@ -469,13 +619,23 @@ $("list").addEventListener("click", (ev) => {
   openLead(row.dataset.id);
 });
 $("leadBody").addEventListener("click", (ev) => {
-  const t = ev.target.closest("[data-act],[data-st],[data-na],[data-lost],[data-ffoc]"); if (!t) return;
+  const t = ev.target.closest("[data-act],[data-st],[data-na],[data-lost],[data-ffoc],[data-tpl]"); if (!t) return;
   if (t.dataset.lost) { finish("Lost", false, t.dataset.lost); return; }
   if (t.dataset.st === "Lost") { const w = $("lostWhy"); w.hidden = false; w.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
   if (t.dataset.st) { finish(t.dataset.st, false); return; }
   if (t.dataset.na) { finish(null, true); return; }
   if (t.dataset.act === "back") { closeLead(); return; }
   if (t.dataset.act === "delete") { askDelete(); return; }
+  if (t.dataset.act === "schedule") { scheduleDialog(); return; }
+  if (t.dataset.act === "calldone") { callDone(); return; }
+  if (t.dataset.tpl) { S.tplLang = t.dataset.tpl; renderLead(S.open, false); return; }
+  if (t.dataset.act === "copywa" || t.dataset.act === "copymail" || t.dataset.act === "copysubj") {
+    const l = S.leads.get(S.open) || S.openCopy; if (!l) return; const lang = leadLang(l);
+    if (t.dataset.act === "copywa") copyText(waText(l, lang));
+    if (t.dataset.act === "copysubj") copyText(mailSubject(l, lang));
+    if (t.dataset.act === "copymail") copyHtml(mailHtml(l, lang), mailPlain(l, lang));
+    return;
+  }
   if (t.dataset.ffoc) { toggleFocus(t.dataset.ffoc); return; }
   if (t.dataset.act === "noteonly") { finish(null, false); return; }
   if (t.dataset.act === "copy") {
@@ -490,6 +650,7 @@ $("leadBody").addEventListener("input", (ev) => {
 $("q").addEventListener("input", function () { S.q = this.value; draw(); });
 $("tabs").addEventListener("click", (ev) => {
   const fb = ev.target.closest("[data-focus]"); if (fb) { enterFocus(fb.dataset.focus); return; }
+  if (ev.target.closest("[data-calls]")) { enterFocus("__calls"); return; }
   const b = ev.target.closest("[data-tab]"); if (!b) return;
   if (S.inFocus) { S.tab = -1; enterFocus(null); } // back to the full list, then jump
   const i = +b.dataset.tab, h = $("sec-" + i);

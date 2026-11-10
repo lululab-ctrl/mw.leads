@@ -29,13 +29,44 @@ export const SIGN_RE = /\n?\s*— ([^\n—]{1,40})\s*$/;
 export function txt(v) { return v == null ? "" : typeof v === "object" ? (v.text || v.label || "") : String(v); }
 
 // a monday item (GraphQL shape: column_values = [{id,text}]) → a lead row
+// Israel time <-> UTC (monday keeps a date column's time in UTC)
+const TZ = "Asia/Jerusalem";
+function tzOffsetMs(utcMs) {
+  const p = {};
+  for (const x of new Intl.DateTimeFormat("en-US", { timeZone: TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date(utcMs))) p[x.type] = x.value;
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) - utcMs;
+}
+// "2026-11-12", "14:00" in Israel -> ms since 1970 (UTC)
+export function israelToUtc(date, time) {
+  const [y, m, d] = String(date).split("-").map(Number), [h, mi] = String(time || "00:00").split(":").map(Number);
+  const guess = Date.UTC(y, m - 1, d, h, mi);
+  let t = guess - tzOffsetMs(guess);
+  t = guess - tzOffsetMs(t); // once more, for the days the clocks change
+  return t;
+}
+// ms (UTC) -> { date: "2026-11-12", time: "14:00" } in Israel
+export function utcToIsrael(ms) {
+  const o = new Date(ms + tzOffsetMs(ms)).toISOString();
+  return { date: o.slice(0, 10), time: o.slice(11, 16) };
+}
+// monday's Follow Up Date value -> the call's moment (0 if no time is set)
+export function fuMoment(value) {
+  let v = value;
+  try { if (typeof v === "string") v = JSON.parse(v); } catch (_) { return 0; }
+  if (!v || !v.date) return 0;
+  if (!v.time) return 0;
+  return Date.parse(v.date + "T" + v.time + "Z") || 0;
+}
+
 export function fromItem(it) {
-  const cv = {};
-  for (const c of it.column_values || []) cv[c.id] = c.text == null ? "" : String(c.text);
+  const cv = {}, vals = {};
+  for (const c of it.column_values || []) { cv[c.id] = c.text == null ? "" : String(c.text); vals[c.id] = c.value; }
+  const fuAt = fuMoment(vals[C.fuDate]);
   return {
     id: String(it.id), name: String(it.name || ""), status: cv[C.status] || "", phone: cv[C.phone] || "",
     email: cv[C.email] || "", source: cv[C.source] || "", interest: cv[C.interest] || "",
-    about: (cv[C.about] || "").slice(0, 1500), lang: cv[C.lang] || "", fu_date: (cv[C.fuDate] || "").slice(0, 10),
+    about: (cv[C.about] || "").slice(0, 1500), lang: cv[C.lang] || "",
+    fu_date: fuAt ? utcToIsrael(fuAt).date : (cv[C.fuDate] || "").slice(0, 10), fu_at: fuAt, fu_state: cv[C.fu] || "",
     created: Date.parse(it.created_at) || 0,
   };
 }
@@ -91,7 +122,7 @@ export function merge(d, prev, s) {
   return d;
 }
 
-const KEYS = ["name", "status", "phone", "email", "source", "interest", "about", "lang", "fu_date", "created", "ecb", "mcb", "na", "ret", "last_at", "last_t", "changed_by", "changed_at", "changed_what"];
+const KEYS = ["name", "status", "phone", "email", "source", "interest", "about", "lang", "fu_date", "fu_at", "fu_state", "created", "ecb", "mcb", "na", "ret", "last_at", "last_t", "changed_by", "changed_at", "changed_what"];
 export function differs(a, b) {
   for (const k of KEYS) if ((a[k] || "") !== (b[k] || "")) return true;
   return false;

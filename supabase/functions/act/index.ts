@@ -1,7 +1,7 @@
 // One press on the lead screen: save the note (if any) and the answer to monday, as the
 // original page's finish(). The note is signed "— Name" so monday shows who really did it.
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
-import { BOARD, C, LOST, STATUSES, STATUS_GROUP, noteHtml } from "../_shared/signals.js";
+import { BOARD, C, LOST, STATUSES, STATUS_GROUP, israelToUtc, noteHtml, utcToIsrael } from "../_shared/signals.js";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -28,6 +28,44 @@ Deno.serve(async (req) => {
   const { data: lock } = await db.from("lead_locks").select("by_email,by_name,expires").eq("lead_id", id).maybeSingle();
   if (lock && lock.by_email !== me.email && new Date(lock.expires).getTime() > Date.now()) {
     return json({ ok: false, code: "locked", by: lock.by_name }, 409);
+  }
+
+  // follow-up call: Follow Up Date (date + time, Israel time in, UTC to monday) and Follow Up = Follow-Up.
+  // No monday update is posted (so nobody gets an email); the call shows in MWP Leads' history.
+  if (b.schedule && typeof b.schedule === "object") {
+    const date = String(b.schedule.date || ""), time = String(b.schedule.time || ""), note = String(b.schedule.note || "").trim().slice(0, 500);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return json({ ok: false, code: "bad_time" }, 400);
+    const at = israelToUtc(date, time);
+    if (!at || at < Date.now() - 864e5 * 2 || at > Date.now() + 864e5 * 400) return json({ ok: false, code: "bad_time" }, 400);
+    const u = new Date(at).toISOString();
+    const cols = { [C.fuDate]: { date: u.slice(0, 10), time: u.slice(11, 19) }, [C.fu]: { label: "Follow-Up" } };
+    try {
+      await monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) });
+    } catch (e) {
+      const code = e instanceof MondayError ? e.code : "error";
+      return json({ ok: false, code, message: String((e as Error).message) }, code === "no_token" ? 503 : 502);
+    }
+    const now = Date.now(), loc = utcToIsrael(at);
+    const what = "Call → " + loc.date.split("-").reverse().join(".") + " " + loc.time;
+    const fields = { fu_at: at, fu_date: loc.date, fu_state: "Follow-Up", touch: now, changed_by: me.name, changed_at: now, changed_what: what };
+    await db.from("leads").update(fields).eq("id", id);
+    const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "call", status_from: l.status, note: what + (note ? " · " + note : "") }).select("id").single();
+    await db.from("lead_updates").upsert({ id: "call-" + (act?.id || now), lead_id: id, kind: "call", text: loc.date.split("-").reverse().join(".") + " " + loc.time + (note ? " · " + note : ""), by: me.name, at: now, source: "app" });
+    return json({ ok: true, fields });
+  }
+  if (b.callDone === true) {
+    try {
+      await monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify({ [C.fu]: { label: "Done" } }) });
+    } catch (e) {
+      const code = e instanceof MondayError ? e.code : "error";
+      return json({ ok: false, code, message: String((e as Error).message) }, code === "no_token" ? 503 : 502);
+    }
+    const now = Date.now();
+    const fields = { fu_state: "Done", touch: now, changed_by: me.name, changed_at: now, changed_what: "Call done" };
+    await db.from("leads").update(fields).eq("id", id);
+    const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "call_done", status_from: l.status, note: "Call done" }).select("id").single();
+    await db.from("lead_updates").upsert({ id: "calldone-" + (act?.id || now), lead_id: id, kind: "call", text: "done", by: me.name, at: now, source: "app" });
+    return json({ ok: true, fields });
   }
 
   // delete: the lead goes from monday (to monday's Trash, where it can be restored for 30 days) and from this list

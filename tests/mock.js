@@ -7,8 +7,8 @@
   const rows = [
     { id: "1", name: "Dana Levi", status: "New Lead", phone: "050-1234567", interest: "Snow leopards", created: now - 2 * D, ecb: now - H, changed_by: "Eliran", changed_at: now - 2 * H, changed_what: "Status → In conversation" },
     { id: "2", name: "רון כהן", status: "In conversation", phone: "0529998877", interest: "Kerkini", created: now - 20 * D, mcb: now - 2 * D, last_t: "Spoke, call later", last_at: now - 3 * D, last_by: "Eliran" },
-    { id: "3", name: "Tom Old", status: "New Lead", phone: "", interest: "Iceland", created: now - 30 * D },
-    { id: "4", name: "Maya Done", status: "Qualified", phone: "+447700900123", created: now - 5 * D, last_t: "Sent the PDF", last_at: day.getTime() + 60000, last_by: "Jeinna" },
+    { id: "3", name: "Tom Old", status: "New Lead", phone: "", interest: "Iceland", created: now - 30 * D, fu_at: now - 3 * H, fu_state: "Follow-Up" },
+    { id: "4", name: "Maya Done", status: "Qualified", phone: "+447700900123", email: "maya@example.com", fu_at: now + 2 * D, fu_state: "Follow-Up", created: now - 5 * D, last_t: "Sent the PDF", last_at: day.getTime() + 60000, last_by: "Jeinna" },
     { id: "5", name: "Future Guy", status: "Future", phone: "0541112233", created: now - 40 * D },
     { id: "6", name: "Won Person", status: "Won", phone: "0541112234", created: now - 40 * D },
     { id: "7", name: "Back Again", status: "Offer sent", phone: "0541112235", created: now - 50 * D, ret: now - D },
@@ -65,6 +65,8 @@
       window.__calls.push({ name, body });
       const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
       if (name === "sync") return window.__noToken ? new Response(JSON.stringify({ ok: false, code: "no_token" }), { status: 503 }) : ok({ ok: true, at: Date.now() });
+      if (name === "act" && body.schedule) { const [y, m, d] = body.schedule.date.split("-").map(Number), [h, mi] = body.schedule.time.split(":").map(Number); const at = Date.UTC(y, m - 1, d, h - 2, mi); return ok({ ok: true, fields: { fu_at: at, fu_date: body.schedule.date, fu_state: "Follow-Up", changed_by: "Jeinna", changed_at: Date.now(), changed_what: "Call → " + body.schedule.date + " " + body.schedule.time } }); }
+      if (name === "act" && body.callDone) return ok({ ok: true, fields: { fu_state: "Done", changed_by: "Jeinna", changed_at: Date.now(), changed_what: "Call done" } });
       if (name === "act" && body.delete) return window.__failDelete ? new Response(JSON.stringify({ ok: false, code: "tool_error", message: "test" }), { status: 502 }) : ok({ ok: true, deleted: true });
       if (name === "act") {
         const f = { touch: Date.now() };

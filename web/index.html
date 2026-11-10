@@ -74,6 +74,16 @@
       <div class="dlgbtns"><button type="button" class="soft" id="fdNo"></button><button type="button" class="dark" id="fdSave"></button></div>
     </div>
   </div>
+  <div class="dlg" id="callDlg" role="dialog" aria-modal="true" aria-labelledby="cdTtl" hidden>
+    <div class="dlgbox">
+      <b id="cdTtl"></b>
+      <p id="cdSub"></p>
+      <div class="cdrow"><input id="cdDate" type="date" class="fdin"><input id="cdTime" type="time" step="900" class="fdin"></div>
+      <input id="cdNote" class="fdin" maxlength="500" autocomplete="off">
+      <div id="cdMsg" class="msg bad" hidden></div>
+      <div class="dlgbtns"><button type="button" class="soft" id="cdNo"></button><button type="button" class="dark" id="cdSave"></button></div>
+    </div>
+  </div>
   <div class="toast" id="toast" hidden><div></div></div>
 </div>
 <script src="config.js"></script>

@@ -205,3 +205,22 @@ button{cursor:pointer}
 .tab.focus.on::after{background:var(--c-new)}
 .tab.focus.on span{background:var(--c-new);color:#fff}
 .focushead{position:static;border-bottom:none;padding:0;margin:0 0 8px}
+
+/* follow-up calls */
+.soft.schedule{min-height:48px;font-size:16px}
+.callcard{border:2px solid var(--c-new);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.callcard.today{border-color:var(--c-talk)}
+.callcard.late{border-color:var(--hot)}
+.cc-t{font-size:18px;font-weight:900}
+.cc-t span{color:var(--hot);font-size:15px}
+.cc-l{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted);flex-wrap:wrap}
+.lng{border:1.5px solid var(--line);background:var(--bg);border-radius:8px;padding:4px 10px;font-weight:700;font-size:14px;color:var(--fg)}
+.lng.on{background:var(--ink);border-color:var(--ink);color:var(--ink-fg)}
+.cc-g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cc-g .soft{min-height:46px;font-size:14px}
+.cdrow{display:grid;grid-template-columns:1.3fr 1fr;gap:8px}
+.tab.calls{color:var(--fg)}
+.tab.calls.late span{background:var(--hot);color:#fff}
+.row.callrow.today .open{box-shadow:inset 4px 0 0 var(--c-talk)}
+.row.callrow.late .open{box-shadow:inset 4px 0 0 var(--hot)}
+.row.callrow.late .txt small{color:var(--hot);font-weight:700}
