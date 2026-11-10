@@ -2,7 +2,7 @@
 // Matan's page. Called every minute by pg_cron (x-cron-secret) and by the page's Refresh
 // button / auto-refresh (a signed-in team member).
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
-import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, merge, signals, stamp, statusLog } from "../_shared/signals.js";
+import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
 
 const COLS = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate];
 const ITEM_FIELDS = `id name created_at group { id } column_values(ids: ${JSON.stringify(COLS)}) { id text }`;
@@ -67,7 +67,11 @@ Deno.serve(async (req) => {
     } catch (e) {
       if (e instanceof MondayError && e.code !== "tool_error") throw e;
     }
-    const sig = signals(ups);
+    // real authors of updates posted under someone else's monday account
+    const { data: na } = await db.from("note_authors").select("update_id,by");
+    const authors: Record<string, string> = {};
+    for (const r of na || []) authors[r.update_id] = r.by;
+    const sig = signals(ups, authors);
 
     // 2b. status changes made in monday, with who made them (monday's activity log)
     const logsByLead: Record<string, any[]> = {};
@@ -92,7 +96,7 @@ Deno.serve(async (req) => {
       for (const l of logs as any[]) {
         const dup = (appSt || []).some((r: any) => r.lead_id === l.lead_id && Math.abs(Number(r.at) - l.at) < 120000 && String(r.text).includes("→ " + l.to));
         if (dup) continue;
-        l.by = Number(l.user_id) > 0 ? (names[l.user_id] || "monday") : "monday automation";
+        l.by = authors["st-" + l.lead_id + "-" + l.at] || (Number(l.user_id) > 0 ? teamName(names[l.user_id] || "monday") : "monday automation");
         (logsByLead[l.lead_id] ||= []).push(l);
         statusRows.push({ id: "st-" + l.lead_id + "-" + l.at, lead_id: l.lead_id, kind: "status", text: (l.from || "—") + " → " + l.to, by: l.by, at: l.at, source: "monday", bot: false });
       }
@@ -102,7 +106,7 @@ Deno.serve(async (req) => {
     }
 
     // 2c. history: every monday note and status change, kept for the lead screen
-    const hist = ups.map(historyRow).filter((r: any) => r.lead_id && r.text);
+    const hist = ups.map((u: any) => historyRow(u, authors)).filter((r: any) => r.lead_id && r.text);
     for (let i = 0; i < hist.length; i += 300) await db.from("lead_updates").upsert(hist.slice(i, i + 300), { ignoreDuplicates: true });
     for (let i = 0; i < statusRows.length; i += 300) await db.from("lead_updates").upsert(statusRows.slice(i, i + 300), { ignoreDuplicates: true });
 

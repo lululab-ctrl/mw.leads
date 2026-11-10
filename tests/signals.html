@@ -18,7 +18,7 @@ const ups = [
 ];
 const s = signals(ups);
 ok(s[1].cb === Date.parse("2026-11-09T10:00:00Z"), "email call-me only from Flow Admin");
-ok(s[1].last && s[1].last.by === "Matan Wild", "team note starting הליד לחץ (not bot) is the last note");
+ok(s[1].last && s[1].last.by === "Matan", "team note starting הליד לחץ (not bot) is the last note, with the team name");
 ok(s[2].m === Date.parse("2026-11-08T10:00:00Z"), "Meta callback from Flow Admin");
 ok(s[2].na === 2, "No answer counts team notes only (2), got " + s[2].na);
 ok(s[3].ret === Date.parse("2026-11-07T10:00:00Z"), "came back");

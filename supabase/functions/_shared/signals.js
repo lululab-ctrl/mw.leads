@@ -35,14 +35,21 @@ export function fromItem(it) {
   };
 }
 
-// who wrote a note: the "— Name" signature if this app posted it, else the monday account
-export function noteBy(t, creatorName) {
+// monday account names → team names
+export const ACCOUNT_NAMES = { "emilya": "Emilia", "Matan Wild": "Matan", "Jeinna Louise Perez": "Jeinna" };
+export function teamName(n) { n = String(n || ""); return ACCOUNT_NAMES[n] || n; }
+
+// who wrote a note: a known real author (note_authors), the "— Name" signature if this app posted it,
+// else the monday account (as a team name)
+export function noteBy(t, creatorName, override) {
+  if (override) return override;
   const m = SIGN_RE.exec(t);
-  return m ? m[1].trim() : String(creatorName || "");
+  return m ? m[1].trim() : teamName(creatorName);
 }
 
 // monday updates → per-lead signals { cb, m, na, ret, last }
-export function signals(updates) {
+export function signals(updates, authors) {
+  authors = authors || {};
   const sig = {};
   for (const u of updates) {
     const id = String(u.item_id || "");
@@ -58,7 +65,7 @@ export function signals(updates) {
     if (!bot && NA_RE.test(t)) s.na++;
     if (RET_RE.test(t)) s.ret = Math.max(s.ret, at);
     if (!bot && !isCb && t && t.charAt(0) !== "@" && (!s.last || at > s.last.at)) {
-      s.last = { t: t.slice(0, 400), at, by: noteBy(t, u.creator && u.creator.name) };
+      s.last = { t: t.slice(0, 400), at, by: noteBy(t, u.creator && u.creator.name, authors[String(u.id)]) };
     }
   }
   return sig;
@@ -92,12 +99,13 @@ export function noteHtml(text, by) {
 }
 
 // monday update → a history row
-export function historyRow(u) {
+export function historyRow(u, authors) {
+  authors = authors || {};
   const t = String(u.text_body || "").trim();
   const bot = String((u.creator && u.creator.id) || "") === BOT;
   return {
     id: String(u.id), lead_id: String(u.item_id || ""), kind: "note", text: t.slice(0, 4000),
-    by: bot ? "Flow Admin" : noteBy(t, u.creator && u.creator.name), at: Date.parse(u.created_at) || 0, source: "monday", bot,
+    by: bot ? "Flow Admin" : noteBy(t, u.creator && u.creator.name, authors[String(u.id)]), at: Date.parse(u.created_at) || 0, source: "monday", bot,
   };
 }
 
