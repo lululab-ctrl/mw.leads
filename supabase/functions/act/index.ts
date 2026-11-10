@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     }
     const now = Date.now(), loc = utcToIsrael(at);
     const what = "Call → " + loc.date.split("-").reverse().join(".") + " " + loc.time;
-    const fields = { fu_at: at, fu_date: loc.date, fu_state: "Follow-Up", touch: now, changed_by: me.name, changed_at: now, changed_what: what };
+    const fields = { fu_at: at, fu_has_time: true, fu_date: loc.date, fu_state: "Follow-Up", touch: now, changed_by: me.name, changed_at: now, changed_what: what };
     await db.from("leads").update(fields).eq("id", id);
     const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "call", status_from: l.status, note: what + (note ? " · " + note : "") }).select("id").single();
     await db.from("lead_updates").upsert({ id: "call-" + (act?.id || now), lead_id: id, kind: "call", text: loc.date.split("-").reverse().join(".") + " " + loc.time + (note ? " · " + note : ""), by: me.name, at: now, source: "app" });

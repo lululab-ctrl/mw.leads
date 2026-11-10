@@ -52,21 +52,38 @@ export function utcToIsrael(ms) {
 // monday's Follow Up Date value -> the call's moment (0 if no time is set)
 export function fuMoment(value) {
   let v = value;
-  try { if (typeof v === "string") v = JSON.parse(v); } catch (_) { return 0; }
-  if (!v || !v.date) return 0;
-  if (!v.time) return 0;
-  return Date.parse(v.date + "T" + v.time + "Z") || 0;
+  try { if (typeof v === "string") v = JSON.parse(v); } catch (_) { return { at: 0, hasTime: false }; }
+  if (!v || !v.date) return { at: 0, hasTime: false };
+  if (!v.time) return { at: israelToUtc(v.date, "00:00"), hasTime: false, date: v.date }; // a date with no time
+  return { at: Date.parse(v.date + "T" + v.time + "Z") || 0, hasTime: true };
+}
+// column types that hold nothing to read (buttons, sub-items, the activity widget)
+const SKIP_TYPES = ["name", "button", "subtasks", "unsupported", "custom"];
+// every filled-in column, in the board's order: [{ t: title, v: text }]
+export function allDetails(it, columns) {
+  const byId = {};
+  for (const c of it.column_values || []) byId[c.id] = c;
+  const out = [];
+  for (const col of columns || []) {
+    if (SKIP_TYPES.includes(col.type)) continue;
+    const c = byId[col.id]; if (!c) continue;
+    let t = c.text == null ? "" : String(c.text).trim();
+    if (col.type === "checkbox") { let v = c.value; try { v = JSON.parse(v); } catch (_) {} t = v && v.checked ? "✓" : ""; }
+    if (!t) continue;
+    out.push({ t: col.title, v: t.slice(0, 2000) });
+  }
+  return out;
 }
 
 export function fromItem(it) {
   const cv = {}, vals = {};
   for (const c of it.column_values || []) { cv[c.id] = c.text == null ? "" : String(c.text); vals[c.id] = c.value; }
-  const fuAt = fuMoment(vals[C.fuDate]);
+  const fu = fuMoment(vals[C.fuDate]), fuAt = fu.at;
   return {
     id: String(it.id), name: String(it.name || ""), status: cv[C.status] || "", phone: cv[C.phone] || "",
     email: cv[C.email] || "", source: cv[C.source] || "", interest: cv[C.interest] || "",
     about: (cv[C.about] || "").slice(0, 1500), lang: cv[C.lang] || "",
-    fu_date: fuAt ? utcToIsrael(fuAt).date : (cv[C.fuDate] || "").slice(0, 10), fu_at: fuAt, fu_state: cv[C.fu] || "",
+    fu_date: fu.date || (fuAt ? utcToIsrael(fuAt).date : (cv[C.fuDate] || "").slice(0, 10)), fu_at: fuAt, fu_has_time: !!fu.hasTime, fu_state: cv[C.fu] || "",
     created: Date.parse(it.created_at) || 0,
   };
 }
@@ -125,6 +142,8 @@ export function merge(d, prev, s) {
 const KEYS = ["name", "status", "phone", "email", "source", "interest", "about", "lang", "fu_date", "fu_at", "fu_state", "created", "ecb", "mcb", "na", "ret", "last_at", "last_t", "changed_by", "changed_at", "changed_what"];
 export function differs(a, b) {
   for (const k of KEYS) if ((a[k] || "") !== (b[k] || "")) return true;
+  if (!!a.fu_has_time !== !!b.fu_has_time) return true;
+  if (JSON.stringify(a.details || []) !== JSON.stringify(b.details || [])) return true;
   return false;
 }
 

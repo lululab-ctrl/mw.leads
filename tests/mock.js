@@ -7,9 +7,11 @@
   const rows = [
     { id: "1", name: "Dana Levi", status: "New Lead", phone: "050-1234567", interest: "Snow leopards", created: now - 2 * D, ecb: now - H, changed_by: "Eliran", changed_at: now - 2 * H, changed_what: "Status → In conversation" },
     { id: "2", name: "רון כהן", status: "In conversation", phone: "0529998877", interest: "Kerkini", created: now - 20 * D, mcb: now - 2 * D, last_t: "Spoke, call later", last_at: now - 3 * D, last_by: "Eliran" },
-    { id: "3", name: "Tom Old", status: "New Lead", phone: "", interest: "Iceland", created: now - 30 * D, fu_at: now - 3 * H, fu_state: "Follow-Up" },
-    { id: "4", name: "Maya Done", status: "Qualified", phone: "+447700900123", email: "maya@example.com", fu_at: now + 2 * D, fu_state: "Follow-Up", created: now - 5 * D, last_t: "Sent the PDF", last_at: day.getTime() + 60000, last_by: "Jeinna" },
+    { id: "3", name: "Tom Old", status: "New Lead", phone: "", interest: "Iceland", created: now - 30 * D, fu_at: now - 3 * H, fu_has_time: true, fu_state: "Follow-Up" },
+    { id: "4", name: "Maya Done", status: "Qualified", phone: "+447700900123", email: "maya@example.com", fu_at: now + 2 * D, fu_has_time: true, fu_state: "Follow-Up", created: now - 5 * D, last_t: "Sent the PDF", last_at: day.getTime() + 60000, last_by: "Jeinna" },
     { id: "5", name: "Future Guy", status: "Future", phone: "0541112233", created: now - 40 * D },
+    { id: "9", name: "Date Only", status: "In conversation", phone: "0541112299", created: now - 9 * D, fu_at: now + 3 * D, fu_has_time: false, fu_state: "Follow-Up",
+      details: [{ t: "Interested in (Form from Website)", v: "Japan winter" }, { t: "Status", v: "In conversation" }, { t: "Email", v: "date.only@example.com" }, { t: "Lead Source", v: "Facebook" }, { t: "Follow Up", v: "Follow-Up" }, { t: "Follow Up Date", v: "2026-11-13" }, { t: "General Notes", v: "Asked about February.\nPrefers WhatsApp." }, { t: "Form Language", v: "English" }, { t: "UTM", v: "fb / paid / japan" }, { t: "Receive updates", v: "✓" }] },
     { id: "6", name: "Won Person", status: "Won", phone: "0541112234", created: now - 40 * D },
     { id: "7", name: "Back Again", status: "Offer sent", phone: "0541112235", created: now - 50 * D, ret: now - D },
     { id: "8", name: "New Today", status: "New Lead", phone: "0541112236", created: day.getTime() + 1000, na: 3 },

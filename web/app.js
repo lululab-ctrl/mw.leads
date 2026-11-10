@@ -59,7 +59,7 @@ function fromRow(r) {
     ret: +r.ret || 0, na: r.na || 0, last: r.last_t ? { t: r.last_t, at: +r.last_at || 0, by: r.last_by || "" } : null,
     stAt: +r.st_at || 0, touch: +r.touch || 0,
     changedBy: r.changed_by || "", changedAt: +r.changed_at || 0, changedWhat: r.changed_what || "",
-    fuAt: +r.fu_at || 0, fuState: r.fu_state || "" };
+    fuAt: +r.fu_at || 0, fuState: r.fu_state || "", fuHasTime: !!r.fu_has_time, details: Array.isArray(r.details) ? r.details : [] };
 }
 
 /* ---------- stamps and locks ---------- */
@@ -133,9 +133,9 @@ function rows() {
 function rowHtml(l, callRow) {
   const f = l._f, s = f.old ? { c: "na" } : (STM[l.status] || { c: "future" }), e = tel(l.phone), w = why(l, f);
   const k = lockOf(l.id);
-  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : callRow ? "📞 " + callShort(l.fuAt) + (l.fuAt < Date.now() ? L(" · עבר הזמן", " · overdue") : "") : f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
+  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : callRow ? "📞 " + callShort(l.fuAt, l.fuHasTime) + (callLate(l) ? L(" · עבר הזמן", " · overdue") : "") : f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
   const st = stampText(l);
-  const cls = callRow ? (l.fuAt < Date.now() ? " callrow late" : new Date(l.fuAt).toDateString() === new Date().toDateString() ? " callrow today" : " callrow") : "";
+  const cls = callRow ? (callLate(l) ? " callrow late" : new Date(l.fuAt).toDateString() === new Date().toDateString() ? " callrow today" : " callrow") : "";
   return '<div class="row' + cls + (f.top && w && !k && !callRow ? " hot" : "") + (f.done ? " done" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
     '<button type="button" class="open" data-act="open"><span class="av st-' + s.c + '">' + esc((l.name || "?").trim().charAt(0).toUpperCase()) + '</span>' +
     '<span class="txt"><b>' + esc(l.name) + '</b><small>' + esc(line) + '</small>' + (st ? '<small class="stamp">' + esc(st) + '</small>' : "") + '</span></button>' +
@@ -166,7 +166,7 @@ function render() {
   if (!searching) {
     // your Focus lists come first, in their own colour; then the sections
     const ft = S.focus.map((f) => '<button type="button" role="tab" class="tab focus' + (fo && fo.id === f.id ? " on" : "") + '" aria-selected="' + !!(fo && fo.id === f.id) + '" data-focus="' + esc(f.id) + '" title="' + esc(f.name) + '"><i>★ ' + esc(f.name) + '</i> <span>' + focusCount(f, r) + '</span></button>').join("");
-    const nCalls = r.filter(isCall).length, lateCalls = r.filter((l) => isCall(l) && l.fuAt < Date.now()).length;
+    const nCalls = r.filter(isCall).length, lateCalls = r.filter((l) => isCall(l) && callLate(l)).length;
     const ct = '<button type="button" role="tab" class="tab calls' + (callsMode ? " on" : "") + (lateCalls ? " late" : "") + '" aria-selected="' + callsMode + '" data-calls="1">📞 ' + L("שיחות", "Calls") + ' <span>' + nCalls + '</span></button>';
     const th = ct + ft + ORDER.map((i) => [names[i], i]).map(([name, i]) => { const on = !fo && !callsMode && S.tab === i; return '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (on ? " on" : "") + '" aria-selected="' + on + '" data-tab="' + i + '">' + esc(name) + ' <span>' + all[i] + '</span></button>'; }).join("");
     if ($("tabs").innerHTML !== th) { $("tabs").innerHTML = th; tabArrows(); }
@@ -237,6 +237,7 @@ function renderLead(id, fresh) {
     '<div class="two" id="answers"><button type="button" class="big wide st-na" data-na="1">' + L("לא ענה/תה", "No answer") + '</button>' + btns + '</div>' +
     '<div id="lostWhy" hidden><div class="q">Lost reason</div><div class="two" style="margin-top:10px">' + LOST.map((r) => '<button type="button" class="soft" data-lost="' + r[0] + '">' + r[0] + '</button>').join('') + '</div></div>' +
     focusButtons(l) +
+    detailsBlock(l) +
     '<div class="q">' + L("היסטוריה", "History") + '</div><div id="hist" class="hist"></div>' +
     '<div class="leadfoot"><a class="mon" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(l.id) + '">' + L("פתיחה ב-monday", "Open in monday") + '</a>' +
     (S.me && S.me.can_delete ? '<button type="button" class="trash" data-act="delete" aria-label="' + L("מחיקת הליד", "Delete this lead") + '" title="' + L("מחיקת הליד", "Delete this lead") + '">' + TRASH + '</button>' : '') + '</div>'; // only Matan and Jeinna can delete
@@ -422,9 +423,12 @@ function callWhen(ms, lang) {
   const t = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
   return lang === "he" ? d + ", בשעה " + t + " (שעון ישראל)" : d + " at " + t + " (Israel time)";
 }
-function callShort(ms) {
+function callShort(ms, hasTime) {
+  if (hasTime === false) return new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", { timeZone: "Asia/Jerusalem", weekday: "short", day: "numeric", month: "short" }).format(new Date(ms)) + L(" · אין שעה", " · no time set");
   return new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", { timeZone: "Asia/Jerusalem", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
 }
+// a date with no time is late only after that day ends (Israel time)
+function callLate(l) { return l.fuHasTime ? l.fuAt < Date.now() : l.fuAt + 864e5 < Date.now(); }
 function tplVars(l, lang) {
   const first = String(l.name || "").trim().split(/\s+/)[0] || "";
   const me = (S.me && S.me.name) || "";
@@ -481,8 +485,17 @@ async function copyHtml(html, plain) {
 }
 function leadLang(l) { return S.tplLang || (/hebrew/i.test(l.lang || "") || /[\u0590-\u05FF]/.test(l.name || "") ? "he" : "en"); }
 function callBlock(l) {
-  if (!l.fuAt || l.fuState === "Done") return '<button type="button" class="soft schedule" data-act="schedule">📅 ' + L("לקבוע שיחת המשך", "Schedule a follow-up call") + '</button>';
-  const lang = leadLang(l), late = l.fuAt < Date.now(), today = new Date(l.fuAt).toDateString() === new Date().toDateString();
+  if (!isCall(l)) return '<button type="button" class="soft schedule" data-act="schedule">📅 ' + L("לקבוע שיחת המשך", "Schedule a follow-up call") + '</button>';
+  const lang = leadLang(l), late = callLate(l), today = new Date(l.fuAt).toDateString() === new Date().toDateString();
+  if (!l.fuHasTime) {
+    // monday has a follow-up date but no time: show it as it is, and offer to set the time
+    const d = new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", { timeZone: "Asia/Jerusalem", weekday: "short", day: "numeric", month: "short" }).format(new Date(l.fuAt));
+    return '<div class="callcard' + (late ? " late" : today ? " today" : "") + '">' +
+      '<div class="cc-top"><div><div class="cc-when">' + esc(d) + '</div><div class="cc-sub">' + (late ? L("עבר הזמן · ", "Overdue · ") : today ? L("היום · ", "Today · ") : "") + L("פולואפ ב-monday · אין שעה", "Follow-up in monday · no time set") + (l.fuState ? " · " + esc(l.fuState) : "") + '</div></div></div>' +
+      '<div class="cc-note">' + L("כדי לשלוח הזמנה ללקוח/ה צריך שעה.", "To invite the client, set a time first.") + '</div>' +
+      '<div class="cc-foot"><button type="button" class="cc-link" data-act="schedule">' + L("לקבוע שעה", "Set the time") + '</button>' +
+      '<button type="button" class="cc-done" data-act="calldone">✓ ' + L("השיחה התקיימה", "Call done") + '</button></div></div>';
+  }
   const hasMail = l.email && /@/.test(l.email), wa = tel(l.phone);
   const day = new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", { timeZone: "Asia/Jerusalem", weekday: "short", day: "numeric", month: "short" }).format(new Date(l.fuAt));
   const hm = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }).format(new Date(l.fuAt));
@@ -533,13 +546,13 @@ $("prevDlg").addEventListener("click", (ev) => {
 });
 function scheduleDialog() {
   const l = S.leads.get(S.open) || S.openCopy; if (!l) return;
-  const now = new Date(Date.now() + 864e5), d = l.fuAt && l.fuState !== "Done" ? new Date(l.fuAt) : now;
+  const now = new Date(Date.now() + 864e5), d = isCall(l) && callLate(l) === false ? new Date(l.fuAt + (l.fuHasTime ? 0 : 3600000)) : now;
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d);
   const g = (t) => (parts.find((x) => x.type === t) || {}).value;
   $("cdTtl").textContent = L("שיחה עם ", "Call with ") + (l.name || "");
   $("cdSub").textContent = L("שעון ישראל. נשמר ב-monday בעמודות Follow Up Date ו-Follow Up.", "Israel time. Saved in monday's Follow Up Date and Follow Up columns.");
   $("cdDate").value = g("year") + "-" + g("month") + "-" + g("day");
-  $("cdTime").value = l.fuAt && l.fuState !== "Done" ? g("hour") + ":" + g("minute") : "10:00";
+  $("cdTime").value = isCall(l) && l.fuHasTime ? g("hour") + ":" + g("minute") : "10:00";
   $("cdNote").value = ""; $("cdNote").placeholder = L("הערה (לא חובה)", "Note (optional)");
   $("cdSave").textContent = L("שמירה", "Save"); $("cdNo").textContent = L("ביטול", "Cancel"); $("cdMsg").hidden = true;
   $("callDlg").hidden = false;
@@ -565,7 +578,15 @@ async function callDone() {
     toast(L("סומן: השיחה התקיימה", "Marked: call done")); renderLead(id, false); loadHist(id);
   } catch (e) { toast(errText(e), true); }
 }
-function isCall(l) { return !!l.fuAt && l.fuState !== "Done"; }
+// any follow-up date in monday counts, with or without a time; Done and Lost don't
+// every filled-in column from monday's Leads board, as it is there (Jeinna, 10 Nov 2026)
+function detailsBlock(l) {
+  const d = l.details || [];
+  if (!d.length) return "";
+  return '<details class="mdet"><summary>' + L("כל הפרטים מ-monday", "All details from monday") + ' <span>' + d.length + '</span></summary><dl>' +
+    d.map((x) => '<dt>' + esc(x.t) + '</dt><dd dir="auto">' + esc(x.v) + '</dd>').join("") + '</dl></details>';
+}
+function isCall(l) { return !!l.fuAt && l.fuState !== "Done" && l.fuState !== "Lost"; }
 
 /* ---------- delete a lead (here and in monday), after "Are you sure?" ---------- */
 const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
@@ -630,7 +651,7 @@ function toRow(l) {
   return { id: l.id, name: l.name, status: l.status, phone: l.phone, email: l.email, source: l.source, interest: l.interest, about: l.about,
     lang: l.lang, fu_date: l.fuDate, created: l.created, ecb: l.ecb, mcb: l.mcb, ret: l.ret, na: l.na,
     last_t: l.last ? l.last.t : null, last_at: l.last ? l.last.at : 0, last_by: l.last ? l.last.by : "", st_at: l.stAt, touch: l.touch,
-    changed_by: l.changedBy, changed_at: l.changedAt, changed_what: l.changedWhat, fu_at: l.fuAt, fu_state: l.fuState };
+    changed_by: l.changedBy, changed_at: l.changedAt, changed_what: l.changedWhat, fu_at: l.fuAt, fu_state: l.fuState, fu_has_time: l.fuHasTime, details: l.details };
 }
 function patch(id, l) { l.id = id; S.leads.set(id, l); draw(); }
 

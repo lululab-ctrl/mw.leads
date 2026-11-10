@@ -2,10 +2,13 @@
 // Matan's page. Called every minute by pg_cron (x-cron-secret) and by the page's Refresh
 // button / auto-refresh (a signed-in team member).
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
-import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
+import { BOARD, C, SKIP_GROUPS, allDetails, differs, fromItem, historyRow, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
 
-const COLS = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate, C.fu];
-const ITEM_FIELDS = `id name created_at group { id } column_values(ids: ${JSON.stringify(COLS)}) { id text value }`;
+// every column (MWP Leads shows all of them); the board's own column list gives titles and order.
+// If monday refuses the big read, the basic columns are read instead and the details stay as they were.
+const BASIC = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate, C.fu];
+const ALL_FIELDS = `id name created_at group { id } column_values { id text value }`;
+const BASIC_FIELDS = `id name created_at group { id } column_values(ids: ${JSON.stringify(BASIC)}) { id text value }`;
 
 function iso(d: Date) { return d.toISOString().slice(0, 10); }
 
@@ -34,19 +37,29 @@ Deno.serve(async (req) => {
   const started = Date.now();
   try {
     // 1. items, 500 a page, up to 8 pages (as the original)
-    const items: any[] = [];
-    let complete = false;
-    let d = await monday(`query { boards(ids: [${BOARD}]) { items_page(limit: 500) { cursor items { ${ITEM_FIELDS} } } } }`);
-    let page = d?.boards?.[0]?.items_page;
-    let guard = 0;
-    while (page) {
-      items.push(...(page.items || []));
-      if (!page.cursor) { complete = true; break; }
-      if (++guard >= 8) break;
-      d = await monday(`query ($c: String!) { next_items_page(limit: 500, cursor: $c) { cursor items { ${ITEM_FIELDS} } } }`, { c: page.cursor });
-      page = d?.next_items_page;
+    const readItems = async (FIELDS: string) => {
+      const out: any[] = []; let done = false;
+      let d = await monday(`query { boards(ids: [${BOARD}]) { items_page(limit: 500) { cursor items { ${FIELDS} } } } }`);
+      let page = d?.boards?.[0]?.items_page; let guard = 0;
+      while (page) {
+        out.push(...(page.items || []));
+        if (!page.cursor) { done = true; break; }
+        if (++guard >= 8) break;
+        d = await monday(`query ($c: String!) { next_items_page(limit: 500, cursor: $c) { cursor items { ${FIELDS} } } }`, { c: page.cursor });
+        page = d?.next_items_page;
+      }
+      return { out, done };
+    };
+    let full = true, items: any[] = [], complete = false;
+    try { const r = await readItems(ALL_FIELDS); items = r.out; complete = r.done; }
+    catch (e) {
+      if (!(e instanceof MondayError) || e.code !== "tool_error") throw e;
+      console.log("full read refused, reading the basic columns", String((e as Error).message).slice(0, 200));
+      full = false; const r = await readItems(BASIC_FIELDS); items = r.out; complete = r.done;
     }
     const kept = items.filter((it) => !SKIP_GROUPS.includes(it.group?.id));
+    const cb = await monday(`query { boards(ids: [${BOARD}]) { columns { id title type } } }`);
+    const boardCols = cb?.boards?.[0]?.columns || [];
 
     // 2. updates: 30 days on the first pass, then 2 days; 100 a page, up to 8 pages
     let ups: any[] = [];
@@ -116,11 +129,14 @@ Deno.serve(async (req) => {
     const seen = new Set<string>();
     const upserts: any[] = [];
     for (const it of kept) {
-      const row = fromItem(it);
+      const row: any = fromItem(it);
+      if (full) row.details = allDetails(it, boardCols);
       if (!row.id) continue;
       seen.add(row.id);
       const prev: any = prevById.get(row.id);
       if (prev && Number(prev.touch || 0) > started - 30000) continue;
+      if (!full) row.details = (prev && prev.details) || [];
+      // basic read: monday's Follow Up Date time is still read, so this stays right
       merge(row, prev, sig[row.id]);
       Object.assign(row, stamp(prev, sig[row.id], logsByLead[row.id]));
       if (!prev || differs(prev, row)) upserts.push({ ...row, synced_at: new Date().toISOString() });
