@@ -6,7 +6,7 @@ export const BOT = "103935161"; // Flow Admin: monday's automation account
 export const C = {
   status: "color_mm5dd249", phone: "phone_mm5mysp", email: "email_mm5mxbf", source: "color_mm5mqmpf",
   interest: "text_mm5m935t", about: "long_text_mm5mtfrr", lang: "color_mm65s7rd", fu: "color_mm5mczpc",
-  fuDate: "date_mm5mqtxx", lost: "color_mm8menag",
+  fuDate: "date_mm5mqtxx", lost: "color_mm8menag", who: "text_mm8z41wf",
 };
 // Newsletter · Field Guides pop-up, Lost, Won
 export const SKIP_GROUPS = ["group_mm8f26v7", "group_mm5mhqhp", "group_mm5m96pr"];
@@ -23,8 +23,12 @@ export const META_RE = /ביקש\/?ה? שנחזור בטלפון|בטלפון\?:
 export const NA_RE = /^(no answer|לא ענ)/i;
 export const RET_RE = /^הליד חזר|התעניינות קודמת|lead returned/i;
 export const AUTO_RE = /^נשלח אוטומטית/;
-// Notes posted from this app end with "— Name" (one monday token posts them all)
-export const SIGN_RE = /\n?\s*— ([^\n—]{1,40})\s*$/;
+// Notes posted from this app end with "— Name · 10.11.2026 14:32" (one monday token posts them all)
+export const SIGN_RE = /\n?\s*— ([^\n—·]{1,40}?)\s*(?:·[^\n—]{0,40})?\s*$/;
+// the note without its signature
+export function unsign(t) { return String(t || "").replace(SIGN_RE, "").trim(); }
+// Israel time as monday readers expect it: "10.11.2026 14:32"
+export function whenIL(ms) { const o = utcToIsrael(ms); return o.date.split("-").reverse().join(".") + " " + o.time; }
 
 export function txt(v) { return v == null ? "" : typeof v === "object" ? (v.text || v.label || "") : String(v); }
 
@@ -101,7 +105,7 @@ export function signals(updates, authors) {
     if (!bot && NA_RE.test(t)) s.na++;
     if (RET_RE.test(t)) s.ret = Math.max(s.ret, at);
     if (!bot && !isCb && t && t.charAt(0) !== "@" && (!s.last || at > s.last.at)) {
-      s.last = { t: t.slice(0, 400), at, by: noteBy(t, u.creator && u.creator.name, authors[String(u.id)]) };
+      s.last = { t: unsign(t).slice(0, 400), at, by: noteBy(t, u.creator && u.creator.name, authors[String(u.id)]) };
     }
   }
   return sig;
@@ -129,10 +133,12 @@ export function differs(a, b) {
   return false;
 }
 
-// HTML body for a note posted to monday: just the note (no names; who did it is kept in MWP Leads)
-export function noteHtml(text) {
+// HTML body for a note posted to monday, signed with who wrote it and when (Jeinna, 10 Nov 2026:
+// monday names the token's owner on every note, so the signature says who really did it)
+export function noteHtml(text, by, at) {
   const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  return "<p>" + esc(text).replace(/\n/g, "<br>") + "</p>";
+  const sig = by ? "<br>— " + esc(by) + (at ? " · " + whenIL(at) : "") : "";
+  return "<p>" + esc(text).replace(/\n/g, "<br>") + sig + "</p>";
 }
 
 // monday update → a history row
@@ -141,7 +147,7 @@ export function historyRow(u, authors) {
   const t = String(u.text_body || "").trim();
   const bot = String((u.creator && u.creator.id) || "") === BOT;
   return {
-    id: String(u.id), lead_id: String(u.item_id || ""), kind: "note", text: t.slice(0, 4000),
+    id: String(u.id), lead_id: String(u.item_id || ""), kind: "note", text: unsign(t).slice(0, 4000),
     by: bot ? "Flow Admin" : noteBy(t, u.creator && u.creator.name, authors[String(u.id)]), at: Date.parse(u.created_at) || 0, source: "monday", bot,
   };
 }

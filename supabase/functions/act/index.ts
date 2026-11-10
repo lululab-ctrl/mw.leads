@@ -1,7 +1,17 @@
 // One press on the lead screen: save the note (if any) and the answer to monday, as the
-// original page's finish(). The note is signed "— Name" so monday shows who really did it.
+// original page's finish(). The note is signed "— Name · date time" and monday's "Last change in
+// MWP Leads" column says who did what and when, so monday shows who really did it.
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
-import { BOARD, C, LOST, STATUSES, STATUS_GROUP, israelToUtc, noteHtml, utcToIsrael } from "../_shared/signals.js";
+import { BOARD, C, LOST, STATUSES, STATUS_GROUP, israelToUtc, noteHtml, utcToIsrael, whenIL } from "../_shared/signals.js";
+
+// monday's "Last change in MWP Leads" column: who, when (Israel time), what. monday's Activity Log keeps
+// every earlier value, so it doubles as the history. A failure here never undoes the change itself.
+async function stampMonday(id: string, by: string, at: number, what: string) {
+  const v = (by + " · " + whenIL(at) + " · " + what).slice(0, 250);
+  try {
+    await monday(`mutation ($b: ID!, $i: ID!, $c: String!, $v: String!) { change_simple_column_value(board_id: $b, item_id: $i, column_id: $c, value: $v) { id } }`, { b: String(BOARD), i: id, c: C.who, v });
+  } catch (e) { console.log("stamp failed", id, String((e as Error).message)); }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -49,6 +59,7 @@ Deno.serve(async (req) => {
     const what = "Call → " + loc.date.split("-").reverse().join(".") + " " + loc.time;
     const fields = { fu_at: at, fu_has_time: true, fu_date: loc.date, fu_state: "Follow-Up", touch: now, changed_by: me.name, changed_at: now, changed_what: what };
     await db.from("leads").update(fields).eq("id", id);
+    await stampMonday(id, me.name, now, what);
     const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "call", status_from: l.status, note: what + (note ? " · " + note : "") }).select("id").single();
     await db.from("lead_updates").upsert({ id: "call-" + (act?.id || now), lead_id: id, kind: "call", text: loc.date.split("-").reverse().join(".") + " " + loc.time + (note ? " · " + note : ""), by: me.name, at: now, source: "app" });
     return json({ ok: true, fields });
@@ -63,6 +74,7 @@ Deno.serve(async (req) => {
     const now = Date.now();
     const fields = { fu_state: "Done", touch: now, changed_by: me.name, changed_at: now, changed_what: "Call done" };
     await db.from("leads").update(fields).eq("id", id);
+    await stampMonday(id, me.name, now, "Call done");
     const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "call_done", status_from: l.status, note: "Call done" }).select("id").single();
     await db.from("lead_updates").upsert({ id: "calldone-" + (act?.id || now), lead_id: id, kind: "call", text: "done", by: me.name, at: now, source: "app" });
     return json({ ok: true, fields });
@@ -91,12 +103,13 @@ Deno.serve(async (req) => {
   const kind = label ? "status" : noAnswer ? "no_answer" : "note";
   const fields: Record<string, unknown> = {};
   let updateId: string | null = null;
+  const t0 = Date.now();
   try {
     if (text) {
-      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: noteHtml(text) });
+      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: noteHtml(text, me.name, t0) });
       updateId = d?.create_update?.id ? String(d.create_update.id) : null;
       fields.last_t = text.slice(0, 400); fields.last_at = Date.now(); fields.last_by = me.name;
-      // monday shows only the note, no names (Jeinna, 10 Nov 2026). The real author is kept here,
+      // the note is signed in monday ("— Name · date time"); the real author is also kept here,
       // so the sync, the stamp and the history always show who did it.
       if (updateId) await db.from("note_authors").upsert({ update_id: updateId, by: me.name, why: "MWP Leads" });
     }
@@ -121,6 +134,7 @@ Deno.serve(async (req) => {
     fields.changed_at = now;
     fields.changed_what = label && label !== l.status ? "Status → " + label + (reason ? " (" + reason + ")" : "") : noAnswer ? "No answer" : "Note";
     await db.from("leads").update(fields).eq("id", id);
+    await stampMonday(id, me.name, now, fields.changed_what as string);
     const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind, status_from: l.status, status_to: label, lost_reason: reason, note: text || null, monday_update_id: updateId }).select("id").single();
     // history rows, so the lead screen shows them at once (the sync keeps these, not monday's copies)
     const rows: any[] = [];
