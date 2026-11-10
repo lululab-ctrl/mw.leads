@@ -112,3 +112,8 @@ button{cursor:pointer}
 
 /* Back stays at the top while the lead screen scrolls */
 #lead .back{position:sticky;top:0;z-index:3;box-shadow:0 4px 14px rgba(50,51,56,.18)}
+
+/* Sign in with Google */
+#signin .giant.google{background:#fff;color:var(--fg);border:2px solid var(--line);font-size:21px;width:100%}
+#signin .giant.google svg{width:26px;height:26px}
+#signin .or{text-align:center;color:var(--muted);font-size:15px;margin:2px 0 -2px}
