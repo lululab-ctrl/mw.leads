@@ -23,8 +23,17 @@ try { const sl = localStorage.getItem("mwpl.lang"); S.lang = sl || ((navigator.l
 function L(he, en) { return S.lang === "he" ? he : en; }
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-function dayStart() { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
-function iso(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+// every time and day in MWP Leads is Israel time, whoever is looking (Jeinna, 11 Nov 2026)
+const TZ = "Asia/Jerusalem";
+function ilParts(ms) {
+  return Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
+    .formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+}
+function ilOffset(ms) { const p = ilParts(ms); return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(ms / 1000) * 1000; }
+// the moment today began in Israel
+function dayStart() { const p = ilParts(Date.now()), mid = Date.UTC(+p.year, +p.month - 1, +p.day); return mid - ilOffset(mid); }
+// a moment's date in Israel, "YYYY-MM-DD"
+function iso(d) { const p = ilParts(+d); return p.year + "-" + p.month + "-" + p.day; }
 function ago(ms) {
   if (!ms) return "";
   const m = Math.max(0, Math.round((Date.now() - ms) / 60000));
@@ -65,8 +74,8 @@ function fromRow(r) {
 /* ---------- stamps and locks ---------- */
 function when(ms) {
   if (!ms) return "";
-  const d = new Date(ms), o = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
-  if (d.getFullYear() !== new Date().getFullYear()) o.year = "numeric";
+  const d = new Date(ms), o = { timeZone: TZ, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
+  if (ilParts(ms).year !== ilParts(Date.now()).year) o.year = "numeric";
   return new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", o).format(d);
 }
 const WHAT_HE = { "Note": "הערה", "No answer": "לא ענה/תה" };
@@ -151,7 +160,7 @@ function rowHtml(l, callRow) {
   const k = lockOf(l.id);
   const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : callRow ? "📞 " + callShort(l.fuAt, l.fuHasTime) + (callLate(l) ? L(" · עבר הזמן", " · overdue") : "") : f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
   const st = stampText(l);
-  const cls = callRow ? (callLate(l) ? " callrow late" : new Date(l.fuAt).toDateString() === new Date().toDateString() ? " callrow today" : " callrow") : "";
+  const cls = callRow ? (callLate(l) ? " callrow late" : iso(l.fuAt) === iso(Date.now()) ? " callrow today" : " callrow") : "";
   return '<div class="row' + cls + (f.top && w && !k && !callRow ? " hot" : "") + (f.done ? " done" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
     '<button type="button" class="open" data-act="open"><span class="av st-' + s.c + '">' + esc((l.name || "?").trim().charAt(0).toUpperCase()) + '</span>' +
     '<span class="txt"><b>' + esc(l.name) + '</b><small>' + esc(line) + '</small>' + (st ? '<small class="stamp">' + esc(st) + '</small>' : "") + '</span></button>' +
@@ -502,7 +511,7 @@ async function copyHtml(html, plain) {
 function leadLang(l) { return S.tplLang || (/hebrew/i.test(l.lang || "") || /[\u0590-\u05FF]/.test(l.name || "") ? "he" : "en"); }
 function callBlock(l) {
   if (!isCall(l)) return '<button type="button" class="soft schedule" data-act="schedule">📅 ' + L("לקבוע שיחת המשך", "Schedule a follow-up call") + '</button>';
-  const lang = leadLang(l), late = callLate(l), today = new Date(l.fuAt).toDateString() === new Date().toDateString();
+  const lang = leadLang(l), late = callLate(l), today = iso(l.fuAt) === iso(Date.now());
   if (!l.fuHasTime) {
     // monday has a follow-up date but no time: show it as it is, and offer to set the time
     const d = new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", { timeZone: "Asia/Jerusalem", weekday: "short", day: "numeric", month: "short" }).format(new Date(l.fuAt));
