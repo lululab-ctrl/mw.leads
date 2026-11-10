@@ -103,8 +103,9 @@ function facts(l) {
   if (f.na >= 3) f.tier = 0;
   f.old = !f.tier && l.status === "New Lead" && (l.created || 0) < now - 14 * 864e5;
   f.score = f.tier ? (5 - f.tier) * 1000 + (f.cbE ? 500 : 0) - f.na * 10 : 0;
-  f.top = f.open && !f.done && f.tier > 0;
-  f.g = f.done ? 3 : f.top ? 0 : f.old ? 2 : 1;
+  // no "Done today" section: a lead you worked on stays in its own section (Jeinna/Matan, 10 Nov 2026)
+  f.top = f.open && f.tier > 0;
+  f.g = f.top ? 0 : f.old ? 2 : 1;
   return f;
 }
 
@@ -132,9 +133,9 @@ function rows() {
 function rowHtml(l) {
   const f = l._f, s = f.old ? { c: "na" } : (STM[l.status] || { c: "future" }), e = tel(l.phone), w = why(l, f);
   const k = lockOf(l.id);
-  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
+  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : (w || l.interest || l.source || "");
   const st = stampText(l);
-  return '<div class="row' + (f.top && w && !k ? " hot" : "") + (f.done ? " done" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
+  return '<div class="row' + (f.top && w && !k ? " hot" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
     '<button type="button" class="open" data-act="open"><span class="av st-' + s.c + '">' + esc((l.name || "?").trim().charAt(0).toUpperCase()) + '</span>' +
     '<span class="txt"><b>' + esc(l.name) + '</b><small>' + esc(line) + '</small>' + (st ? '<small class="stamp">' + esc(st) + '</small>' : "") + '</span></button>' +
     (e && !k ? '<a class="ring" data-act="call" href="tel:' + esc(e) + '" aria-label="' + L("להתקשר", "Call") + '">' + PHONE + '</a>' : '<span class="ring off" aria-hidden="true">' + PHONE + '</span>') + '</div>';
@@ -187,7 +188,7 @@ function renderLead(id, fresh) {
   const btns = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed", "Won", "Future", "Lost"].map((k) =>
     '<button type="button" class="big st-' + STM[k].c + (l.status === k ? " cur" : "") + '" data-st="' + k + '">' + esc(word(k)) + '</button>').join("");
   $("leadBody").innerHTML =
-    '<button type="button" class="back" data-act="back">' + L("→ חזרה", "← Back") + '</button>' +
+    '<button type="button" class="back" data-act="back" aria-label="' + L("סגירת הליד", "Close the lead") + '">✕ ' + L("סגירה", "Close") + '</button>' +
     '<h2 class="name">' + esc(l.name) + '</h2>' +
     (l.interest ? '<div class="about">' + esc(l.interest) + '</div>' : "") +
     (w ? '<div class="flag">' + esc(w) + '</div>' : "") +
@@ -209,7 +210,7 @@ function closeLead() {
   const id = S.open; S.open = null; S.openCopy = null; clearInterval(S.hb); release(id);
   $("lead").hidden = true; $("home").hidden = !S.user;
   render();
-  // show where the lead went in the list (e.g. Done today), if it's still listed
+  // show where the lead is in the list, if it's still listed
   const row = id && document.querySelector('.row[data-id="' + CSS.escape(id) + '"]');
   if (row) { row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(() => row.classList.remove("flash"), 1800); }
 }
