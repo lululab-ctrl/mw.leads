@@ -62,10 +62,13 @@ export function signals(updates, authors) {
     const isCb = bot && CB_RE.test(t);
     if (isCb) s.cb = Math.max(s.cb, at);
     if (bot && META_RE.test(t)) s.m = Math.max(s.m, at);
-    if (!bot && NA_RE.test(t)) s.na++;
+    const ct = bot ? t : cleanNote(t);
+    if (!bot && NA_RE.test(ct)) s.na++;
     if (RET_RE.test(t)) s.ret = Math.max(s.ret, at);
-    if (!bot && !isCb && t && t.charAt(0) !== "@" && (!s.last || at > s.last.at)) {
-      s.last = { t: cleanNote(t).slice(0, 400), at, by: noteBy(t, u.creator && u.creator.name, authors[String(u.id)]) };
+    // a status-only update from this app isn't a note
+    const noteText = ct.replace(/^Status: [^\n]*\n?/, "").trim();
+    if (!bot && !isCb && noteText && t.charAt(0) !== "@" && (!s.last || at > s.last.at)) {
+      s.last = { t: noteText.slice(0, 400), at, by: noteBy(t, u.creator && u.creator.name, authors[String(u.id)]) };
     }
   }
   return sig;

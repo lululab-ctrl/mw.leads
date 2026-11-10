@@ -353,7 +353,7 @@ async function loadMon() {
   renderSignin();
   // ask once per device, not for Eliran (no monday login)
   let asked = false; try { asked = localStorage.getItem("mwpl.monAsked") === "1"; } catch (_) {}
-  if (!S.mon.connected && !asked && S.me && S.me.name !== "Eliran" && $("pwBox").hidden) { $("monBox").hidden = false; }
+  // not offered: the team works only here, without monday logins (Jeinna, 10 Nov 2026)
 }
 $("monBtn").addEventListener("click", () => { $("monMsg").hidden = true; $("monBox").hidden = false; window.scrollTo(0, 0); });
 $("monLater").addEventListener("click", () => { $("monBox").hidden = true; try { localStorage.setItem("mwpl.monAsked", "1"); } catch (_) {} });
