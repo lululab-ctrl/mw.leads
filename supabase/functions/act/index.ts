@@ -1,7 +1,7 @@
 // One press on the lead screen: save the note (if any) and the answer to monday, as the
 // original page's finish(). The note is signed "— Name" so monday shows who really did it.
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
-import { BOARD, C, LOST, STATUSES, noteHtml } from "../_shared/signals.js";
+import { BOARD, C, LOST, STATUSES, STATUS_GROUP, noteHtml } from "../_shared/signals.js";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -51,6 +51,12 @@ Deno.serve(async (req) => {
       if (reason) cols[C.lost] = { label: reason };
       await monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) });
       fields.status = label;
+      // and to the group of the same name (a failed move never undoes the status change)
+      const g = STATUS_GROUP[label];
+      if (g) {
+        try { await monday(`mutation ($i: ID!, $g: String!) { move_item_to_group(item_id: $i, group_id: $g) { id } }`, { i: id, g }); }
+        catch (e) { console.log("group move failed", id, label, String((e as Error).message)); }
+      }
     }
     if (label) fields.st_at = Date.now();
     const now = Date.now();

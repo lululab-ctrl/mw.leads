@@ -12,6 +12,11 @@ export const C = {
 export const SKIP_GROUPS = ["group_mm8f26v7", "group_mm5mhqhp", "group_mm5m96pr"];
 export const STATUSES = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed", "Won", "Future", "Lost"];
 export const LOST = ["Price", "Dates", "Not a fit", "No response", "Other"];
+// each status has its own group on the Leads board; a status change moves the lead there too (Jeinna, 10 Nov 2026)
+export const STATUS_GROUP = {
+  "New Lead": "topics", "In conversation": "group_mm5y88wd", "Qualified": "group_mm7wb0b0", "Offer sent": "group_mm7w8hm7",
+  "Committed": "group_mm8m1xmp", "Won": "group_mm5m96pr", "Future": "group_mm7wj1a8", "Lost": "group_mm5mhqhp",
+};
 
 export const CB_RE = /^הליד לחץ/; // the update monday gets when a lead clicks the call-me button in the info email
 export const META_RE = /ביקש\/?ה? שנחזור בטלפון|בטלפון\?: ?כן|ביקש בטופס של Meta|call you\?: ?(?!email)\S/i;
