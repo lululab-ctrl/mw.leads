@@ -340,9 +340,19 @@ window.addEventListener("scroll", () => {
   const y = $("tabwrap").getBoundingClientRect().bottom + 12; let cur = null;
   document.querySelectorAll("#list .sec").forEach((h) => { if (h.getBoundingClientRect().top <= y) cur = +h.id.slice(4); });
   if (cur === null) { const f = document.querySelector("#list .sec"); cur = f ? +f.id.slice(4) : 0; }
+  // while you scroll, a small label under the tabs says which section you're in
+  showPill(S.jumpY != null && Math.abs(window.scrollY - S.jumpY) < 40 ? S.tab : cur);
   if (S.jumpY != null) { if (Math.abs(window.scrollY - S.jumpY) < 40) return; S.jumpY = null; }
   setTab(cur);
 }, { passive: true });
+function showPill(i) {
+  const p = $("secPill"), h = $("sec-" + i);
+  if (window.scrollY < 30 || !h) { p.classList.remove("on"); return; }
+  const n = h.querySelector(".sr") ? h.querySelector(".sr").textContent : "";
+  p.textContent = n.replace(/ (\d+)$/, " · $1");
+  p.classList.add("on");
+  clearTimeout(showPill.t); showPill.t = setTimeout(() => p.classList.remove("on"), 1400);
+}
 // arrows show there are more tabs (swipe the bar, or tap an arrow)
 function tabArrows() {
   const t = $("tabs"), rtl = getComputedStyle(t).direction === "rtl";
