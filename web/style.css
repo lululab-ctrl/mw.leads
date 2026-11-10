@@ -231,7 +231,6 @@ button{cursor:pointer}
 .cc-link{border:none;background:none;color:var(--muted);font-weight:700;font-size:14px;text-decoration:underline;padding:6px 2px}
 .cc-done{border:none;border-radius:12px;background:var(--call);color:var(--call-fg);font-weight:900;font-size:15px;padding:10px 16px;min-height:44px}
 .cdrow{display:grid;grid-template-columns:1.3fr 1fr;gap:8px}
-.tab.calls{color:var(--fg)}
 .tab.calls.late span{background:var(--hot);color:#fff}
 .row.callrow.today .open{box-shadow:inset 4px 0 0 var(--c-talk)}
 .row.callrow.late .open{box-shadow:inset 4px 0 0 var(--hot)}
