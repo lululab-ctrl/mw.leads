@@ -155,3 +155,16 @@ button{cursor:pointer}
 /* the floating section label while scrolling */
 .secpill{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%) translateY(-4px);background:var(--ink);color:var(--ink-fg);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:700;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;box-shadow:0 4px 14px rgba(50,51,56,.25)}
 .secpill.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* delete: a small trash button in the bottom corner of an open lead, then "Are you sure?" */
+.trash{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));inset-inline-end:max(16px,env(safe-area-inset-right,0px));width:48px;height:48px;border-radius:50%;border:2px solid var(--line);background:var(--bg);color:var(--muted);display:grid;place-items:center;z-index:6;box-shadow:0 2px 10px rgba(50,51,56,.15)}
+.trash svg{width:22px;height:22px}
+.trash:hover,.trash:focus-visible{color:var(--hot);border-color:var(--hot)}
+.dlg{position:fixed;inset:0;z-index:30;background:rgba(50,51,56,.45);display:grid;place-items:center;padding:16px}
+.dlgbox{background:var(--bg);border-radius:20px;padding:20px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.dlgbox b{font-size:20px;font-weight:900;overflow-wrap:anywhere;unicode-bidi:plaintext}
+.dlgbox p{margin:0;color:var(--muted);font-size:15px}
+.dlgbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.danger{min-height:52px;border-radius:16px;border:none;background:var(--hot);color:#fff;font-weight:900;font-size:16px}
+.danger:disabled{opacity:.6}
+#lead .col{padding-bottom:64px}

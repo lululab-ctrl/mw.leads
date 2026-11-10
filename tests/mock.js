@@ -50,6 +50,7 @@
       window.__calls.push({ name, body });
       const ok = (j) => new Response(JSON.stringify(j), { status: 200 });
       if (name === "sync") return window.__noToken ? new Response(JSON.stringify({ ok: false, code: "no_token" }), { status: 503 }) : ok({ ok: true, at: Date.now() });
+      if (name === "act" && body.delete) return window.__failDelete ? new Response(JSON.stringify({ ok: false, code: "tool_error", message: "test" }), { status: 502 }) : ok({ ok: true, deleted: true });
       if (name === "act") {
         const f = { touch: Date.now() };
         let text = (body.note || "").trim(); if (body.noAnswer) text = "No answer" + (text ? "\n" + text : "");

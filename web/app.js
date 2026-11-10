@@ -213,7 +213,8 @@ function renderLead(id, fresh) {
     '<div class="two" id="answers"><button type="button" class="big wide st-na" data-na="1">' + L("לא ענה/תה", "No answer") + '</button>' + btns + '</div>' +
     '<div id="lostWhy" hidden><div class="q">Lost reason</div><div class="two" style="margin-top:10px">' + LOST.map((r) => '<button type="button" class="soft" data-lost="' + r[0] + '">' + r[0] + '</button>').join('') + '</div></div>' +
     '<div class="q">' + L("היסטוריה", "History") + '</div><div id="hist" class="hist"></div>' +
-    '<a class="mon" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(l.id) + '">' + L("פתיחה ב-monday", "Open in monday") + '</a>';
+    '<a class="mon" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(l.id) + '">' + L("פתיחה ב-monday", "Open in monday") + '</a>' +
+    '<button type="button" class="trash" data-act="delete" aria-label="' + L("מחיקת הליד", "Delete this lead") + '" title="' + L("מחיקת הליד", "Delete this lead") + '">' + TRASH + '</button>';
   $("lead").hidden = false; $("lead").scrollTop = keep; $("home").hidden = true;
   renderHist();
 }
@@ -252,6 +253,36 @@ function renderHist() {
     (h.kind === "status" ? '<b>' + L("סטטוס: ", "Status: ") + esc(h.text) + '</b>' : esc(h.text)) +
     '</div><small>' + esc(h.by || "") + ' · ' + esc(when(+h.at)) + (h.source === "app" ? L(" · מהכלי", " · from this app") : L(" · ב-monday", " · in monday")) + '</small></div>').join("");
 }
+
+/* ---------- delete a lead (here and in monday), after "Are you sure?" ---------- */
+const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+function askDelete() {
+  const id = S.open, l = S.leads.get(id) || S.openCopy; if (!l) return;
+  const d = $("delDlg");
+  $("delTtl").textContent = L("למחוק את ", "Delete ") + (l.name || "") + "?";
+  $("delSub").textContent = L("הליד יימחק גם ב-monday (monday שומר אותו בסל המחזור שלו 30 יום). אי אפשר לבטל את זה מכאן.", "The lead is deleted in monday too (monday keeps it in its Trash for 30 days). You can't undo this from here.");
+  $("delYes").textContent = L("כן, למחוק", "Yes, delete");
+  $("delNo").textContent = L("ביטול", "Cancel");
+  $("delYes").disabled = false;
+  d.hidden = false; $("delNo").focus();
+}
+$("delNo").addEventListener("click", () => { $("delDlg").hidden = true; });
+$("delDlg").addEventListener("click", (ev) => { if (ev.target.id === "delDlg") $("delDlg").hidden = true; });
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("delDlg").hidden) $("delDlg").hidden = true; });
+$("delYes").addEventListener("click", async () => {
+  const id = S.open, l = S.leads.get(id) || S.openCopy; if (!l) return;
+  $("delYes").disabled = true;
+  try {
+    await fn("act", { id, delete: true });
+    $("delDlg").hidden = true;
+    S.leads.delete(id); S.openSec = null;
+    closeLead();
+    toast(L("נמחק: ", "Deleted: ") + (l.name || ""));
+  } catch (e) {
+    $("delYes").disabled = false;
+    toast(e && e.code === "locked" ? (e.by || "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now") : errText(e), true);
+  }
+});
 
 /* ---------- server calls ---------- */
 async function fn(name, body) {
@@ -314,6 +345,7 @@ $("leadBody").addEventListener("click", (ev) => {
   if (t.dataset.st) { finish(t.dataset.st, false); return; }
   if (t.dataset.na) { finish(null, true); return; }
   if (t.dataset.act === "back") { closeLead(); return; }
+  if (t.dataset.act === "delete") { askDelete(); return; }
   if (t.dataset.act === "noteonly") { finish(null, false); return; }
   if (t.dataset.act === "copy") {
     const v = t.dataset.v;
