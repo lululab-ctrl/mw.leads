@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>MWP Leads</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="../web/style.css">
+</head>
+<body>
+<div id="app" dir="ltr">
+  <div id="signin" class="gut" hidden><div class="col">
+    <h1 id="siTtl"></h1>
+    <p id="siSub"></p>
+    <form id="siForm">
+      <input id="siEmail" type="email" autocomplete="email" required>
+      <button class="giant" id="siBtn" type="submit"></button>
+    </form>
+    <div id="siMsg" class="msg" hidden></div>
+  </div></div>
+  <div id="home" class="gut" hidden><div class="col">
+    <div class="hd">
+      <h1><span id="ttl"></span><small><i class="live" id="dot"></i><span id="sync"></span></small></h1>
+      <button class="sm" id="refresh" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg></button>
+      <button class="sm" id="lang" type="button"></button>
+    </div>
+    <div id="banner" class="banner" hidden></div>
+    <input class="search" id="q" type="search" autocomplete="off">
+    <div id="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+    <button class="later" id="later" type="button" hidden></button>
+    <div class="who"><span id="whoName"></span> · <button type="button" id="signout"></button></div>
+  </div></div>
+  <div id="lead" class="gut" hidden><div class="col" id="leadBody"></div></div>
+  <div class="toast" id="toast" hidden><div></div></div>
+</div>
+<script src="mock.js"></script>
+<script type="module" src="../web/app.js"></script>
+</body>
+</html>

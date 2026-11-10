@@ -1,0 +1,316 @@
+// MWP Leads: Matan's page, moved out of Claude. The screens, ranking and buttons are his,
+// unchanged. What changed: the list comes from Supabase (kept in sync with monday by the
+// `sync` function every minute) and each press goes through the `act` function.
+const CFG = window.MWPL_CONFIG || {};
+const sb = window.__MWPL_MOCK || (await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm"))
+  .createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
+
+const BOARD = 5100640869;
+const ST = [
+  { k: "New Lead", c: "new", he: "ליד חדש", en: "New" },
+  { k: "In conversation", c: "talk", he: "בשיחה", en: "In conversation" },
+  { k: "Qualified", c: "qual", he: "מתאים", en: "Qualified" },
+  { k: "Offer sent", c: "offer", he: "נשלחה הצעה", en: "Offer sent" },
+  { k: "Committed", c: "commit", he: "התחייב/ה", en: "Committed" },
+  { k: "Won", c: "won", he: "נרשם/ה", en: "Won" },
+  { k: "Future", c: "future", he: "לעתיד", en: "Later" },
+  { k: "Lost", c: "lost", he: "לא רלוונטי", en: "Lost" }];
+const STM = {}; ST.forEach((s) => { STM[s.k] = s; });
+const LOST = [["Price", "מחיר"], ["Dates", "תאריכים"], ["Not a fit", "לא מתאים"], ["No response", "אין מענה"], ["Other", "אחר"]];
+const OPEN = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed"];
+const S = { lang: "en", leads: new Map(), q: "", open: null, user: null, me: null, syncing: false, syncAt: 0, metaAt: 0, dbReady: false, err: null, later: false };
+try { const sl = localStorage.getItem("mwpl.lang"); S.lang = sl || ((navigator.language || "").slice(0, 2) === "he" ? "he" : "en"); } catch (_) {}
+function L(he, en) { return S.lang === "he" ? he : en; }
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function dayStart() { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function iso(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function ago(ms) {
+  if (!ms) return "";
+  const m = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if (m < 1) return L("עכשיו", "just now");
+  if (m < 60) return L("לפני " + m + " דק׳", m + " min ago");
+  const h = Math.round(m / 60);
+  if (h < 24) return L("לפני " + h + " שע׳", h + " h ago");
+  const d = Math.round(h / 24);
+  return d === 1 ? L("אתמול", "yesterday") : L("לפני " + d + " ימים", d + " days ago");
+}
+function tel(raw) {
+  const d = String(raw || "").replace(/[^\d+]/g, "");
+  if (d.replace(/\D/g, "").length < 7) return null;
+  if (d[0] === "+") return d;
+  if (d.indexOf("00") === 0) return "+" + d.slice(2);
+  if (d.indexOf("972") === 0 && d.length >= 11) return "+" + d;
+  if (d[0] === "0") return "+972" + d.slice(1);
+  if (d.length === 8 || d.length === 9) return "+972" + d;
+  if (d.length === 10) return "+1" + d;
+  return "+" + d;
+}
+function telShow(e) { if (!e) return ""; if (e.indexOf("+972") === 0) { const r = "0" + e.slice(4); return r.length === 10 ? r.slice(0, 3) + "-" + r.slice(3, 6) + "-" + r.slice(6) : r; } return e; }
+function toast(t, bad) {
+  const el = $("toast"); el.firstElementChild.textContent = t; el.firstElementChild.className = bad ? "bad" : ""; el.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { el.hidden = true; }, bad ? 6000 : 2600);
+}
+
+// a database row → the shape the original page works with
+function fromRow(r) {
+  return { id: r.id, name: r.name, status: r.status, phone: r.phone, email: r.email, source: r.source, interest: r.interest,
+    about: r.about, lang: r.lang, fuDate: r.fu_date, created: +r.created || 0, ecb: +r.ecb || 0, mcb: +r.mcb || 0,
+    ret: +r.ret || 0, na: r.na || 0, last: r.last_t ? { t: r.last_t, at: +r.last_at || 0, by: r.last_by || "" } : null,
+    stAt: +r.st_at || 0, touch: +r.touch || 0 };
+}
+
+/* ---------- ranking (unchanged) ---------- */
+function facts(l) {
+  /* Order: 1 asked us to call (Meta form in the past week, or the email button), 2 came back again, 3 new by date (past week, never contacted), 4 follow-up due. Old = New Lead for over two weeks. */
+  const now = Date.now(), t0 = dayStart(), lastAt = (l.last && l.last.at) || 0, W = 7 * 864e5;
+  const f = { cbE: !!(l.ecb && l.ecb > lastAt), cbM: !!(l.mcb && l.mcb > lastAt && l.mcb > now - W),
+    ret: !!(l.ret && l.ret > lastAt && l.ret > now - W),
+    fresh: l.status === "New Lead" && (l.created || 0) > now - W,
+    due: !!(l.fuDate && l.fuDate <= iso(new Date())),
+    done: lastAt >= t0 || (l.stAt || 0) >= t0, open: OPEN.indexOf(l.status) >= 0, na: l.na || 0 };
+  f.cb = f.cbE || f.cbM;
+  f.tier = f.cb ? 1 : f.ret ? 2 : f.fresh ? 3 : 0;
+  if (f.na >= 3) f.tier = 0;
+  f.old = !f.tier && l.status === "New Lead" && (l.created || 0) < now - 14 * 864e5;
+  f.score = f.tier ? (5 - f.tier) * 1000 + (f.cbE ? 500 : 0) - f.na * 10 : 0;
+  f.top = f.open && !f.done && f.tier > 0;
+  f.g = f.done ? 3 : f.top ? 0 : f.old ? 2 : 1;
+  return f;
+}
+
+/* ---------- screens ---------- */
+function word(k) { return k || ""; }
+const PHONE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25c1.1.37 2.3.57 3.6.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>';
+function why(l, f) {
+  if (f.tier === 1) return f.cbE ? L("לחץ/ה ״תחזרו אליי״ במייל", "Clicked Call me in the email") : L("ביקש/ה שנתקשר (טופס Meta)", "Asked for a call (Meta form)");
+  if (f.tier === 2) return L("חזר/ה שוב", "Came back again");
+  if (f.tier === 3) return (l.created || 0) >= dayStart() ? L("חדש מהיום", "New today") : L("חדש · ", "New · ") + ago(l.created);
+  if (f.tier === 4) return L("לחזור היום", "Follow up today");
+  if (f.old) return L("מחכה ", "Waiting ") + Math.round((Date.now() - l.created) / 864e5) + L(" ימים", " days");
+  return "";
+}
+function rows() {
+  const q = S.q.trim().toLowerCase(), out = [];
+  S.leads.forEach((l) => {
+    if (l.status === "Won" || l.status === "Lost") return;
+    const show = q ? (l.name + " " + (l.phone || "") + " " + (l.interest || "")).toLowerCase().indexOf(q) >= 0 : (S.later ? l.status === "Future" : l.status !== "Future");
+    if (show) { l._f = facts(l); out.push(l); }
+  });
+  out.sort((a, b) => a._f.g - b._f.g || b._f.score - a._f.score || (b.created || 0) - (a.created || 0));
+  return out;
+}
+function rowHtml(l) {
+  const f = l._f, s = f.old ? { c: "na" } : (STM[l.status] || { c: "future" }), e = tel(l.phone), w = why(l, f);
+  const line = f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
+  return '<div class="row' + (f.top && w ? " hot" : "") + (f.done ? " done" : "") + '" data-id="' + esc(l.id) + '">' +
+    '<button type="button" class="open" data-act="open"><span class="av st-' + s.c + '">' + esc((l.name || "?").trim().charAt(0).toUpperCase()) + '</span>' +
+    '<span class="txt"><b>' + esc(l.name) + '</b><small>' + esc(line) + '</small></span></button>' +
+    (e ? '<a class="ring" data-act="call" href="tel:' + esc(e) + '" aria-label="' + L("להתקשר", "Call") + '">' + PHONE + '</a>' : '<span class="ring off" aria-hidden="true">' + PHONE + '</span>') + '</div>';
+}
+function render() {
+  $("app").dir = S.lang === "he" ? "rtl" : "ltr";
+  document.documentElement.lang = S.lang;
+  $("lang").textContent = S.lang === "he" ? "EN" : "עב";
+  $("ttl").textContent = L("לידים", "Leads");
+  $("q").placeholder = L("חיפוש שם", "Find a name");
+  $("signout").textContent = L("יציאה", "Sign out");
+  $("whoName").textContent = S.me ? S.me.name : (S.user ? S.user.email : "");
+  renderSignin();
+  if (S.open && !S.leads.has(S.open)) closeLead();
+  if (!S.dbReady && !S.leads.size) return;
+  const r = rows(), list = $("list"); let nLater = 0;
+  S.leads.forEach((l) => { if (l.status === "Future") nLater++; });
+  const lb = $("later"); lb.hidden = !nLater || !!S.q.trim();
+  lb.textContent = S.later ? L("חזרה לרשימה", "Back to the list") : L("לחזור אליהם אחר כך", "Call later") + " (" + nLater + ")";
+  if (!r.length) {
+    list.innerHTML = '<div class="empty">' + (S.leads.size ? L("אין כאן אף אחד.", "Nobody here.") : (S.syncing ? L("מביאים את הלידים…", "Getting your leads…") : L("אין עדיין לידים. לוחצים על רענון.", "No leads yet. Tap refresh."))) + '</div>';
+    render.h = ""; return;
+  }
+  let html = "", g0 = -1;
+  const names = [L("להתקשר קודם", "Call first"), L("בתהליך", "In progress"), L("ישנים, עוד לא חזרנו אליהם", "Old, never called"), L("טופלו היום", "Done today")], cnt = [0, 0, 0, 0];
+  r.forEach((l) => { cnt[l._f.g]++; });
+  r.forEach((l) => {
+    const g = l._f.g;
+    if (g !== g0) { html += '<div class="sec' + (g === 0 ? " hot" : "") + '">' + names[g] + ' <span>' + cnt[g] + '</span></div>'; g0 = g; }
+    html += rowHtml(l);
+  });
+  if (render.h !== html) { list.innerHTML = html; render.h = html; }
+}
+function openLead(id) {
+  const l = S.leads.get(id); if (!l) return; S.open = id;
+  const f = facts(l), e = tel(l.phone), w = why(l, f);
+  const btns = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed", "Won", "Future", "Lost"].map((k) =>
+    '<button type="button" class="big st-' + STM[k].c + (l.status === k ? " cur" : "") + '" data-st="' + k + '">' + esc(word(k)) + '</button>').join("");
+  $("leadBody").innerHTML =
+    '<button type="button" class="back" data-act="back">' + L("→ חזרה", "← Back") + '</button>' +
+    '<h2 class="name">' + esc(l.name) + '</h2>' +
+    (l.interest ? '<div class="about">' + esc(l.interest) + '</div>' : "") +
+    (w ? '<div class="flag">' + esc(w) + '</div>' : "") +
+    (e ? '<a class="giant" href="tel:' + esc(e) + '">' + PHONE + '<span>' + L("להתקשר", "Call") + '<small>' + esc(telShow(e)) + '</small></span></a>' : '<div class="giant off">' + L("אין מספר טלפון", "No phone number") + '</div>') +
+    (e ? '<div class="two"><a class="soft" target="_blank" rel="noopener" href="https://wa.me/' + esc(e.slice(1)) + '">WhatsApp</a><button type="button" class="soft" data-act="copy" data-v="' + esc(telShow(e)) + '">' + L("העתקת מספר", "Copy number") + '</button></div>' : "") +
+    (l.last && l.last.t ? '<div class="lastn">' + esc(l.last.t) + '<small>' + esc(l.last.by || "") + ' ' + ago(l.last.at) + '</small></div>' : "") +
+    '<textarea id="noteBox" dir="auto" placeholder="' + L("לכתוב הערה (לא חובה)", "Write a note (optional)") + '"></textarea>' +
+    '<div class="q">' + L("מה קרה?", "What happened?") + '</div>' +
+    '<div class="two" id="answers"><button type="button" class="big wide st-na" data-na="1">' + L("לא ענה/תה", "No answer") + '</button>' + btns + '</div>' +
+    '<div id="lostWhy" hidden><div class="q">Lost reason</div><div class="two" style="margin-top:10px">' + LOST.map((r) => '<button type="button" class="soft" data-lost="' + r[0] + '">' + r[0] + '</button>').join('') + '</div></div>' +
+    '<button type="button" class="dark" data-act="noteonly">' + L("לשמור רק את ההערה", "Save the note only") + '</button>' +
+    '<a class="mon" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(l.id) + '">' + L("פתיחה ב-monday", "Open in monday") + '</a>';
+  $("lead").hidden = false; $("lead").scrollTop = 0; $("home").hidden = true;
+}
+function closeLead() { S.open = null; $("lead").hidden = true; $("home").hidden = !S.user; draw(); }
+
+/* ---------- server calls ---------- */
+async function fn(name, body) {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw { code: "signed_out" };
+  const r = await fetch(CFG.supabaseUrl + "/functions/v1/" + name, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token, apikey: CFG.supabaseAnonKey },
+    body: JSON.stringify(body || {}),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.ok === false) throw { code: j.code || j.error || "error", message: j.message || "" };
+  return j;
+}
+
+/* one tap = save the note (if any) and the answer to monday, then back to the list */
+async function finish(label, noAnswer, reason) {
+  const id = S.open, l = S.leads.get(id); if (!l) return;
+  const box = $("noteBox"), text = (box ? box.value : "").trim();
+  if (!label && !noAnswer && !text) { toast(L("קודם כותבים הערה", "Write a note first"), true); return; }
+  const bs = $("leadBody").querySelectorAll("button"); bs.forEach((b) => { b.disabled = true; });
+  try {
+    const j = await fn("act", { id, label, noAnswer, reason, note: text });
+    patch(id, fromRow(Object.assign(toRow(l), j.fields || {})));
+    toast(label ? L("נשמר: ", "Saved: ") + word(label) : L("נשמר", "Saved"));
+    closeLead();
+  } catch (e) { toast(errText(e), true); bs.forEach((b) => { b.disabled = false; }); }
+}
+function toRow(l) {
+  return { id: l.id, name: l.name, status: l.status, phone: l.phone, email: l.email, source: l.source, interest: l.interest, about: l.about,
+    lang: l.lang, fu_date: l.fuDate, created: l.created, ecb: l.ecb, mcb: l.mcb, ret: l.ret, na: l.na,
+    last_t: l.last ? l.last.t : null, last_at: l.last ? l.last.at : 0, last_by: l.last ? l.last.by : "", st_at: l.stAt, touch: l.touch };
+}
+function patch(id, l) { l.id = id; S.leads.set(id, l); draw(); }
+
+async function sync(manual) {
+  if (S.syncing || !S.user) return;
+  S.syncing = true; S.err = null; setSync(); draw();
+  try {
+    const j = await fn("sync", {});
+    if (j.at) S.syncAt = +j.at;
+    banner(null);
+    if (manual) toast(L("מעודכן", "Up to date"));
+  } catch (e) { S.err = e || {}; banner(errText(e), "", true); }
+  S.syncing = false; setSync(); draw();
+}
+
+/* ---------- events ---------- */
+$("list").addEventListener("click", (ev) => {
+  const row = ev.target.closest(".row"), t = ev.target.closest("[data-act]"); if (!row || !t) return;
+  if (t.dataset.act === "call") { const id = row.dataset.id; setTimeout(() => openLead(id), 400); return; }
+  openLead(row.dataset.id);
+});
+$("leadBody").addEventListener("click", (ev) => {
+  const t = ev.target.closest("[data-act],[data-st],[data-na],[data-lost]"); if (!t) return;
+  if (t.dataset.lost) { finish("Lost", false, t.dataset.lost); return; }
+  if (t.dataset.st === "Lost") { const w = $("lostWhy"); w.hidden = false; w.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
+  if (t.dataset.st) { finish(t.dataset.st, false); return; }
+  if (t.dataset.na) { finish(null, true); return; }
+  if (t.dataset.act === "back") { closeLead(); return; }
+  if (t.dataset.act === "noteonly") { finish(null, false); return; }
+  if (t.dataset.act === "copy") {
+    const v = t.dataset.v;
+    (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast(L("המספר הועתק", "Number copied"))).catch(() => toast(v));
+  }
+});
+$("q").addEventListener("input", function () { S.q = this.value; draw(); });
+$("later").addEventListener("click", () => { S.later = !S.later; render(); window.scrollTo(0, 0); });
+$("refresh").addEventListener("click", () => sync(true));
+$("lang").addEventListener("click", () => {
+  S.lang = S.lang === "he" ? "en" : "he";
+  try { localStorage.setItem("mwpl.lang", S.lang); } catch (_) {}
+  render(); setSync();
+});
+$("banner").addEventListener("click", (ev) => { if (ev.target.id === "retry") sync(true); });
+$("signout").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
+let rq = 0;
+function draw() { cancelAnimationFrame(rq); rq = requestAnimationFrame(render); }
+function setSync() {
+  const d = $("dot"), t = $("sync");
+  d.className = "live" + (S.syncing ? " busy" : S.err ? " err" : S.syncAt || S.metaAt ? " on" : "");
+  t.textContent = S.syncing ? L("מסתנכרן עם monday…", "Syncing with monday…") : S.err ? L("אין חיבור ל-monday", "Not connected to monday") : Math.max(S.syncAt, S.metaAt) ? L("מסונכרן עם monday · ", "In sync with monday · ") + ago(Math.max(S.syncAt, S.metaAt)) : L("מתחבר…", "Connecting…");
+  $("refresh").classList.toggle("spin", S.syncing);
+}
+function banner(msg, kind, retry) {
+  const b = $("banner"); if (!msg) { b.hidden = true; return; }
+  b.className = "banner" + (kind ? " " + kind : "");
+  b.innerHTML = esc(msg) + (retry ? '<button type="button" id="retry">' + L("לנסות שוב", "Try again") + '</button>' : "");
+  b.hidden = false;
+}
+function errText(e) {
+  const c = e && e.code;
+  if (c === "no_token") return L("החיבור ל-monday עוד לא הוגדר (חסר מפתח API). הרשימה השמורה מוצגת.", "The monday connection isn't set up yet (no API token). Showing the saved list.");
+  if (c === "needs_reauth") return L("monday דחה את מפתח ה-API. צריך מפתח חדש.", "monday refused the API token. A new token is needed.");
+  if (c === "not_team" || c === "signed_out") return L("צריך להתחבר מחדש.", "Please sign in again.");
+  if (c === "note_required") return L("קודם כותבים הערה", "Write a note first");
+  if (c === "tool_error") return L("monday החזיר שגיאה: ", "monday returned an error: ") + ((e && e.message) || "");
+  return L("monday לא עונה כרגע. מוצגת הרשימה האחרונה שנשמרה.", "monday isn't answering right now. Showing the last saved list.");
+}
+
+/* ---------- sign-in ---------- */
+function renderSignin() {
+  $("siTtl").textContent = L("לידים", "Leads");
+  $("siSub").textContent = L("מתחברים עם המייל של הצוות. נשלח אליך קישור כניסה.", "Sign in with your team email. We'll email you a sign-in link.");
+  $("siEmail").placeholder = L("המייל שלך", "Your email");
+  $("siBtn").textContent = L("לשלוח לי קישור", "Email me a link");
+}
+$("siForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const email = $("siEmail").value.trim().toLowerCase(), m = $("siMsg");
+  $("siBtn").disabled = true;
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
+  $("siBtn").disabled = false; m.hidden = false;
+  if (error) { m.className = "msg bad"; m.textContent = /not on the MWP Leads team|Database error/i.test(error.message) ? L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list.") : error.message; return; }
+  m.className = "msg"; m.textContent = L("שלחנו קישור ל-", "We sent a link to ") + email + L(". פותחים אותו במכשיר הזה.", ". Open it on this device.");
+});
+
+/* ---------- boot ---------- */
+async function loadAll() {
+  const { data, error } = await sb.from("leads").select("*").limit(1000);
+  if (error) { banner(L("הרשימה השמורה לא נטענה.", "The saved list didn't load."), "", true); S.dbReady = true; draw(); return; }
+  const m = new Map(); (data || []).forEach((r) => m.set(r.id, fromRow(r)));
+  S.leads = m; S.dbReady = true; draw();
+}
+async function loadMeta() {
+  const { data } = await sb.from("sync_meta").select("at").eq("id", 1).maybeSingle();
+  S.metaAt = (data && +data.at) || 0; setSync();
+}
+async function start(user) {
+  S.user = user;
+  $("signin").hidden = true; $("home").hidden = false;
+  const { data: me } = await sb.from("team").select("name,email").eq("email", (user.email || "").toLowerCase()).maybeSingle();
+  S.me = me || null;
+  if (!me) { S.dbReady = true; banner(L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list."), ""); render(); return; }
+  await Promise.all([loadAll(), loadMeta()]);
+  sb.channel("leads-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, (p) => {
+      if (p.eventType === "DELETE") { S.leads.delete(p.old.id); } else if (p.new) { S.leads.set(p.new.id, fromRow(p.new)); }
+      draw();
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sync_meta" }, (p) => { S.metaAt = +p.new.at || 0; setSync(); })
+    .subscribe((st) => { if (st === "SUBSCRIBED") loadAll(); });
+  setTimeout(() => sync(false), 1200);
+  setInterval(() => {
+    if (document.hidden) return;
+    if (Date.now() - Math.max(S.syncAt, S.metaAt) > 55000 && !S.open) sync(false); else setSync();
+  }, 30000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - Math.max(S.syncAt, S.metaAt) > 55000) sync(false); });
+}
+
+render(); setSync();
+const { data: { session } } = await sb.auth.getSession();
+if (session && session.user) start(session.user);
+else { $("signin").hidden = false; $("home").hidden = true; }
+sb.auth.onAuthStateChange((ev, s) => { if (ev === "SIGNED_IN" && s && !S.user) start(s.user); });

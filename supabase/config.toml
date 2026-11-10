@@ -1,0 +1,9 @@
+# Supabase CLI settings. Each function checks its own callers (team sign-in or the cron secret),
+# so JWT checking at the gateway is off.
+project_id = "mw-leads"
+
+[functions.sync]
+verify_jwt = false
+
+[functions.act]
+verify_jwt = false

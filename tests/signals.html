@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><title>signals tests</title>
+<pre id="out">running…</pre>
+<script type="module">
+import { signals, merge, fromItem, differs, noteHtml, noteBy, BOT, C } from "../supabase/functions/_shared/signals.js";
+const out = [], ok = (c, m) => out.push((c ? "PASS " : "FAIL ") + m);
+const T = (d) => new Date(d).toISOString();
+const ups = [
+  { item_id: 1, text_body: "הליד לחץ על הכפתור", created_at: T("2026-11-09T10:00:00Z"), creator: { id: BOT, name: "Flow Admin" } },
+  { item_id: 1, text_body: "הליד לחץ שוב", created_at: T("2026-11-09T09:00:00Z"), creator: { id: "5", name: "Matan Wild" } },
+  { item_id: 2, text_body: "ביקש שנחזור בטלפון", created_at: T("2026-11-08T10:00:00Z"), creator: { id: BOT } },
+  { item_id: 2, text_body: "No answer", created_at: T("2026-11-08T11:00:00Z"), creator: { id: "7", name: "emilya" } },
+  { item_id: 2, text_body: "לא ענה", created_at: T("2026-11-08T12:00:00Z"), creator: { id: "7", name: "emilya" } },
+  { item_id: 2, text_body: "No answer", created_at: T("2026-11-08T13:00:00Z"), creator: { id: BOT } },
+  { item_id: 3, text_body: "הליד חזר לטופס", created_at: T("2026-11-07T10:00:00Z"), creator: { id: BOT } },
+  { item_id: 3, text_body: "נשלח אוטומטית מייל", created_at: T("2026-11-07T11:00:00Z"), creator: { id: "9" } },
+  { item_id: 3, text_body: "@Matan look", created_at: T("2026-11-07T12:00:00Z"), creator: { id: "9" } },
+  { item_id: 3, text_body: "Spoke with her\n— Eliran", created_at: T("2026-11-06T12:00:00Z"), creator: { id: "9", name: "Jeinna Louise Perez" } },
+];
+const s = signals(ups);
+ok(s[1].cb === Date.parse("2026-11-09T10:00:00Z"), "email call-me only from Flow Admin");
+ok(s[1].last && s[1].last.by === "Matan Wild", "team note starting הליד לחץ (not bot) is the last note");
+ok(s[2].m === Date.parse("2026-11-08T10:00:00Z"), "Meta callback from Flow Admin");
+ok(s[2].na === 2, "No answer counts team notes only (2), got " + s[2].na);
+ok(s[3].ret === Date.parse("2026-11-07T10:00:00Z"), "came back");
+ok(s[3].last.t.startsWith("Spoke") && s[3].last.by === "Eliran", "skips auto/@ notes; signature gives the real author");
+ok(noteBy("hello", "X") === "X", "no signature → monday account");
+const it = { id: 42, name: "Dana", created_at: "2026-11-01T08:00:00Z", column_values: [{ id: C.status, text: "New Lead" }, { id: C.phone, text: "0501234567" }, { id: C.about, text: "Can we call you?: Yes" }, { id: C.fuDate, text: "2026-11-12" }] };
+const d = fromItem(it);
+ok(d.id === "42" && d.status === "New Lead" && d.fu_date === "2026-11-12", "fromItem reads columns");
+merge(d, null, undefined);
+ok(d.mcb === d.created, "Meta request in About → mcb = created");
+const prev = { ...d, na: 4, last_t: "old", last_at: 100000, last_by: "A", st_at: 77, touch: 88 };
+const d2 = merge(fromItem(it), prev, { na: 1, last: { t: "new", at: 90000, by: "B" } });
+ok(d2.na === 4 && d2.st_at === 77 && d2.touch === 88, "keeps the higher count and page fields");
+ok(d2.last_t === "old", "older note than the kept one is ignored");
+const d3 = merge(fromItem(it), prev, { last: { t: "newer", at: 200000, by: "B" } });
+ok(d3.last_t === "newer" && differs(prev, d3), "newer note replaces and marks changed");
+ok(!differs(d3, { ...d3 }), "same row → no write");
+ok(noteHtml("a<b\nc", "Eliran") === "<p>a&lt;b<br>c<br>— Eliran</p>", "note is escaped and signed");
+document.getElementById("out").textContent = out.join("\n") + "\n\n" + (out.some((x) => x.startsWith("FAIL")) ? "SOME FAILED" : "ALL PASSED");
+</script>

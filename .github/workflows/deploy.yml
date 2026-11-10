@@ -1,0 +1,131 @@
+# Every push to main:
+#  1. the page (web/) to GitHub Pages, with config.js filled in from the Actions variables
+#  2. the database and the two functions to Supabase (skipped with a warning until the secrets are set)
+#
+# Settings > Secrets and variables > Actions:
+#   Variables: SUPABASE_PROJECT_REF, SUPABASE_URL, SUPABASE_ANON_KEY
+#   Secrets:   SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD, CRON_SECRET (any long random text),
+#              TEAM (one per line: email,Name), MONDAY_API_TOKEN (later: until then the list stays empty and the buttons say so)
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  pages:
+    name: Page to GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fill in config.js
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::warning title=Page not connected::Set the SUPABASE_URL and SUPABASE_ANON_KEY variables."
+          fi
+          printf 'window.MWPL_CONFIG = { supabaseUrl: %s, supabaseAnonKey: %s };\n' \
+            "$(jq -Rn --arg v "$SUPABASE_URL" '$v')" "$(jq -Rn --arg v "$SUPABASE_ANON_KEY" '$v')" > web/config.js
+          v="$(git rev-parse --short HEAD)"
+          sed -i "s/style.css\"/style.css?v=$v\"/; s/config.js\"/config.js?v=$v\"/; s/app.js\"/app.js?v=$v\"/" web/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  supabase:
+    name: Database and functions to Supabase
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - name: Check the Supabase secrets are set
+        id: check
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_DB_PASSWORD" ] || [ -z "$REF" ]; then
+            echo "::warning title=Supabase deploy skipped::Set SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD and the SUPABASE_PROJECT_REF variable."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check.outputs.go == 'yes'
+        uses: actions/checkout@v4
+      - if: steps.check.outputs.go == 'yes'
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+      - if: steps.check.outputs.go == 'yes'
+        name: Database migrations
+        run: |
+          supabase link --project-ref "$REF" --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD" --yes
+      - if: steps.check.outputs.go == 'yes'
+        name: Function secrets
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          MONDAY_API_TOKEN: ${{ secrets.MONDAY_API_TOKEN }}
+          SITE_ORIGIN: ${{ vars.SITE_ORIGIN }}
+        run: |
+          args=()
+          [ -n "$CRON_SECRET" ] && args+=("CRON_SECRET=$CRON_SECRET")
+          [ -n "$MONDAY_API_TOKEN" ] && args+=("MONDAY_API_TOKEN=$MONDAY_API_TOKEN")
+          [ -n "$SITE_ORIGIN" ] && args+=("SITE_ORIGIN=$SITE_ORIGIN")
+          [ -z "$MONDAY_API_TOKEN" ] && echo "::warning title=No monday token::MONDAY_API_TOKEN isn't set: syncing and the buttons won't work until it is."
+          if [ ${#args[@]} -gt 0 ]; then supabase secrets set "${args[@]}" --project-ref "$REF"; fi
+      - if: steps.check.outputs.go == 'yes'
+        name: Functions
+        run: supabase functions deploy --project-ref "$REF" --use-api
+      - if: steps.check.outputs.go == 'yes'
+        name: Every-minute sync (address and secret in Vault)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "::warning title=No CRON_SECRET::The every-minute sync stays off until CRON_SECRET is set."; exit 0; fi
+          url="https://$REF.supabase.co/functions/v1/sync"
+          case "$CRON_SECRET" in *'$s$'*) echo "::error::CRON_SECRET can't contain \$s\$"; exit 1;; esac
+          q=$(jq -n --arg sql "select public.set_sync_secrets(\$u\$$url\$u\$, \$s\$$CRON_SECRET\$s\$)" '{query: $sql}')
+          code=$(curl -sS -o /tmp/q.json -w '%{http_code}' -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" -d "$q")
+          if [ "$code" != "201" ] && [ "$code" != "200" ]; then echo "::error title=Sync schedule::Supabase answered $code"; cat /tmp/q.json; exit 1; fi
+      - if: steps.check.outputs.go == 'yes'
+        name: Team (who can sign in)
+        env:
+          TEAM: ${{ secrets.TEAM }}
+        run: |
+          # TEAM secret, one person per line: email,Name
+          if [ -z "$TEAM" ]; then echo "::warning title=No TEAM::Nobody can sign in until the TEAM secret is set."; exit 0; fi
+          people=$(printf '%s\n' "$TEAM" | awk -F, 'NF>=2{gsub(/^[ \t]+|[ \t\r]+$/,"",$1);gsub(/^[ \t]+|[ \t\r]+$/,"",$2);print $1"\t"$2}' | jq -R -s -c 'split("\n")|map(select(length>0)|split("\t")|{email:.[0],name:.[1]})')
+          case "$people" in *'$t$'*) echo "::error::TEAM can't contain \$t\$"; exit 1;; esac
+          q=$(jq -n --arg sql "select public.set_team(\$t\$$people\$t\$::jsonb)" '{query: $sql}')
+          code=$(curl -sS -o /tmp/t.json -w '%{http_code}' -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" -d "$q")
+          if [ "$code" != "201" ] && [ "$code" != "200" ]; then echo "::error title=Team::Supabase answered $code"; cat /tmp/t.json; exit 1; fi
+          echo "Team: $(printf '%s' "$people" | jq length) people"
+      - if: steps.check.outputs.go == 'yes'
+        name: Account safety settings (sign-in links only, team emails only)
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          body=$(jq -n --arg site "$SITE_URL" '{mailer_autoconfirm:false, external_email_enabled:true, disable_signup:false} + (if $site != "" then {site_url:$site, uri_allow_list:$site} else {} end)')
+          code=$(curl -sS -o /tmp/a.json -w '%{http_code}' -X PATCH "https://api.supabase.com/v1/projects/$REF/config/auth" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" -d "$body")
+          if [ "$code" != "200" ]; then echo "::error title=Account settings::Supabase answered $code"; cat /tmp/a.json; exit 1; fi
