@@ -91,9 +91,25 @@ async function claim(id) {
 function release(id) { if (id) sb.rpc("release_lead", { p_id: id }).then(() => {}, () => {}); }
 
 /* ---------- ranking (unchanged) ---------- */
+// who did a change: a team member, or Claude / an automation working under someone's monday account
+const NOT_PEOPLE = ["Claude", "Automation", "monday automation", "Flow Admin", ""];
+function isPerson(by) { return NOT_PEOPLE.indexOf(String(by || "")) < 0; }
+const CLAUDE_RE = /\(\d{1,2}\.\d{1,2}(\.\d{2,4})?, ?Claude/;
+const AUTO_TXT = /^(נשלח אוטומטית|הליד לחץ|הליד חזר|התעניינות קודמת)/;
+function histWho(h, all) {
+  const t = String(h.text || "");
+  if (h.bot || h.by === "Flow Admin" || h.by === "monday automation" || AUTO_TXT.test(t)) return L("אוטומציה", "Automation");
+  if (CLAUDE_RE.test(t)) return "Claude";
+  if (h.kind === "status" && (all || []).some((n) => n.kind === "note" && CLAUDE_RE.test(String(n.text || "")) && n.by === h.by && Math.abs(+n.at - +h.at) < 180000)) return "Claude";
+  return h.by || "";
+}
 function facts(l) {
   /* Order: 1 asked us to call (Meta form in the past week, or the email button), 2 came back again, 3 new by date (past week, never contacted), 4 follow-up due. Old = New Lead for over two weeks. */
-  const now = Date.now(), t0 = dayStart(), lastAt = (l.last && l.last.at) || 0, W = 7 * 864e5;
+  const now = Date.now(), t0 = dayStart(), noteAt = (l.last && l.last.at) || 0, W = 7 * 864e5;
+  // a status change by a person handles the lead too, not only a note (Jeinna, 11 Nov 2026): it leaves
+  // Call first and comes back only if the lead does something new. Claude and automations don't count.
+  const stBy = /^Status/.test(l.changedWhat || "") && isPerson(l.changedBy) ? (l.changedAt || 0) : 0;
+  const lastAt = Math.max(noteAt, l.stAt || 0, stBy);
   const f = { cbE: !!(l.ecb && l.ecb > lastAt), cbM: !!(l.mcb && l.mcb > lastAt && l.mcb > now - W),
     ret: !!(l.ret && l.ret > lastAt && l.ret > now - W),
     fresh: l.status === "New Lead" && (l.created || 0) > now - W,
@@ -279,7 +295,7 @@ function renderHist() {
   if (!S.hist.length) { el.innerHTML = '<div class="hi muted">' + L("אין עדיין היסטוריה.", "No history yet.") + '</div>'; return; }
   el.innerHTML = S.hist.map((h) => '<div class="hi' + (h.bot ? " bot" : "") + '"><div class="ht">' +
     (h.kind === "status" ? '<b>' + L("סטטוס: ", "Status: ") + esc(h.text) + '</b>' : h.kind === "call" ? '<b>📞 ' + (h.text === "done" ? L("השיחה התקיימה", "Call done") : L("שיחה נקבעה: ", "Call scheduled: ") + esc(h.text)) + '</b>' : esc(h.text)) +
-    '</div><small>' + esc(h.by || "") + ' · ' + esc(when(+h.at)) + (h.source === "app" ? L(" · מהכלי", " · from this app") : L(" · ב-monday", " · in monday")) + '</small></div>').join("");
+    '</div><small>' + esc(histWho(h, S.hist)) + ' · ' + esc(when(+h.at)) + (h.source === "app" ? L(" · מהכלי", " · from this app") : L(" · ב-monday", " · in monday")) + '</small></div>').join("");
 }
 
 /* ---------- Focus: a temporary, private view of chosen leads ---------- */

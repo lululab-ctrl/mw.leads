@@ -94,7 +94,7 @@ export function signals(updates, authors) {
   for (const u of updates) {
     const id = String(u.item_id || "");
     if (!id) continue;
-    const s = sig[id] || (sig[id] = { cb: 0, m: 0, na: 0, ret: 0, last: null });
+    const s = sig[id] || (sig[id] = { cb: 0, m: 0, na: 0, ret: 0, last: null, claude: [] });
     const t = String(u.text_body || "").trim();
     const at = Date.parse(u.created_at) || 0;
     const bot = String((u.creator && u.creator.id) || "") === BOT;
@@ -104,8 +104,9 @@ export function signals(updates, authors) {
     if (bot && META_RE.test(t)) s.m = Math.max(s.m, at);
     if (!bot && NA_RE.test(t)) s.na++;
     if (RET_RE.test(t)) s.ret = Math.max(s.ret, at);
+    if (CLAUDE_RE.test(t)) s.claude.push(at);
     if (!bot && !isCb && t && t.charAt(0) !== "@" && (!s.last || at > s.last.at)) {
-      s.last = { t: unsign(t).slice(0, 400), at, by: noteBy(t, u.creator && u.creator.name, authors[String(u.id)]) };
+      s.last = { t: unsign(t).slice(0, 400), at, by: CLAUDE_RE.test(t) ? "Claude" : noteBy(t, u.creator && u.creator.name, authors[String(u.id)]) };
     }
   }
   return sig;
@@ -148,7 +149,7 @@ export function historyRow(u, authors) {
   const bot = String((u.creator && u.creator.id) || "") === BOT;
   return {
     id: String(u.id), lead_id: String(u.item_id || ""), kind: "note", text: unsign(t).slice(0, 4000),
-    by: bot ? "Flow Admin" : noteBy(t, u.creator && u.creator.name, authors[String(u.id)]), at: Date.parse(u.created_at) || 0, source: "monday", bot,
+    by: bot ? "Flow Admin" : CLAUDE_RE.test(t) ? "Claude" : noteBy(t, u.creator && u.creator.name, authors[String(u.id)]), at: Date.parse(u.created_at) || 0, source: "monday", bot,
   };
 }
 
@@ -171,7 +172,10 @@ export function stamp(prev, s, logs) {
   const cands = [];
   if (s && s.last) cands.push({ by: s.last.by, at: s.last.at, what: NA_RE.test(s.last.t) ? "No answer" : "Note" });
   for (const l of logs || []) if (l.to && l.by !== "monday automation") cands.push({ by: l.by, at: l.at, what: "Status → " + l.to });
-  for (const c of cands) if (c.by && c.at > best.changed_at + 5000) best = { changed_by: c.by, changed_at: c.at, changed_what: c.what };
+  for (const c of cands) {
+    if (c.by && c.at > best.changed_at + 5000) best = { changed_by: c.by, changed_at: c.at, changed_what: c.what };
+    else if (c.by && c.by !== best.changed_by && Math.abs(c.at - best.changed_at) <= 5000 && c.what === best.changed_what) best = { changed_by: c.by, changed_at: c.at, changed_what: c.what };
+  }
   return best;
 }
 

@@ -100,6 +100,8 @@ Deno.serve(async (req) => {
         const dup = (appSt || []).some((r: any) => r.lead_id === l.lead_id && Math.abs(Number(r.at) - l.at) < 120000 && String(r.text).includes("→ " + l.to));
         if (dup) continue;
         l.by = authors["st-" + l.lead_id + "-" + l.at] || (Number(l.user_id) > 0 ? teamName(names[l.user_id] || "monday") : "monday automation");
+        // a status change Claude made shows under the person's account, a moment before Claude's note
+        if ((sig[l.lead_id]?.claude || []).some((c: number) => Math.abs(c - l.at) < 180000)) l.by = "Claude";
         (logsByLead[l.lead_id] ||= []).push(l);
         statusRows.push({ id: "st-" + l.lead_id + "-" + l.at, lead_id: l.lead_id, kind: "status", text: (l.from || "—") + " → " + l.to, by: l.by, at: l.at, source: "monday", bot: false });
       }
@@ -111,7 +113,7 @@ Deno.serve(async (req) => {
     // 2c. history: every monday note and status change, kept for the lead screen
     const hist = ups.map((u: any) => historyRow(u, authors)).filter((r: any) => r.lead_id && r.text);
     for (let i = 0; i < hist.length; i += 300) await db.from("lead_updates").upsert(hist.slice(i, i + 300), { ignoreDuplicates: true });
-    for (let i = 0; i < statusRows.length; i += 300) await db.from("lead_updates").upsert(statusRows.slice(i, i + 300), { ignoreDuplicates: true });
+    for (let i = 0; i < statusRows.length; i += 300) await db.from("lead_updates").upsert(statusRows.slice(i, i + 300));
 
     // 3. merge with what we have; leave alone anything changed from the page in the last 30 s
     const { data: have } = await db.from("leads").select("*");
