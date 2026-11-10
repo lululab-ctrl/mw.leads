@@ -14,8 +14,9 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
   const db = admin();
 
-  const cronSecret = Deno.env.get("CRON_SECRET");
-  const fromCron = !!cronSecret && req.headers.get("x-cron-secret") === cronSecret;
+  // spaces and line breaks are ignored on both sides (a pasted secret often ends with a line break)
+  const cronSecret = (Deno.env.get("CRON_SECRET") || "").replace(/\s+/g, "");
+  const fromCron = !!cronSecret && (req.headers.get("x-cron-secret") || "").replace(/\s+/g, "") === cronSecret;
   if (!fromCron && !(await teamMember(req, db))) return json({ error: "not_team" }, 403);
 
   // a manual refresh skips a sync that finished under 10 seconds ago
