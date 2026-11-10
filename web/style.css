@@ -111,7 +111,10 @@ button{cursor:pointer}
 [hidden]{display:none!important}
 
 /* Back stays at the top while the lead screen scrolls */
-#lead .back{position:sticky;top:0;z-index:3;box-shadow:0 4px 14px rgba(50,51,56,.18)}
+/* a solid top bar on the lead: Close and the lead's name; nothing hides under a floating button */
+.leadbar{position:sticky;top:calc(-10px - env(safe-area-inset-top,0px));z-index:3;background:var(--bg);display:flex;align-items:center;gap:12px;padding:10px 0 8px;margin-top:-10px;border-bottom:1px solid var(--line)}
+.leadbar .back{flex:none}
+.lb-name{font-weight:700;font-size:16px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;unicode-bidi:plaintext}
 
 /* Sign in with Google */
 #signin .giant.google{background:#fff;color:var(--fg);border:2px solid var(--line);font-size:21px;width:100%}
@@ -235,3 +238,16 @@ button{cursor:pointer}
 .row.callrow.today .open{box-shadow:inset 4px 0 0 var(--c-talk)}
 .row.callrow.late .open{box-shadow:inset 4px 0 0 var(--hot)}
 .row.callrow.late .txt small{color:var(--hot);font-weight:700}
+
+.cc-prev{display:flex;align-items:center;justify-content:center;gap:8px;border:none;background:none;color:var(--c-new);font-weight:700;font-size:15px;padding:4px}
+.cc-prev svg{width:17px;height:17px}
+.pvbox{max-height:calc(100vh - 32px);overflow-y:auto;max-width:520px}
+.pvbox>*{flex-shrink:0}
+.pv-top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.pv-top .seg button{padding:6px 12px}
+.pv-wa{white-space:pre-wrap;background:#E7FBE6;color:#1f2d1f;border-radius:14px 14px 14px 4px;padding:12px 14px;font-size:15px;line-height:1.45;unicode-bidi:plaintext}
+.pv-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pv-btns .soft{min-height:44px;font-size:14px}
+.pv-subj{font-size:14px;font-weight:700;unicode-bidi:plaintext}
+.pv-mail{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.pv-tip{margin:0;color:var(--muted);font-size:13px}

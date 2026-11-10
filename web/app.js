@@ -222,14 +222,14 @@ function renderLead(id, fresh) {
   const btns = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed", "Won", "Future", "Lost"].map((k) =>
     '<button type="button" class="big st-' + STM[k].c + (l.status === k ? " cur" : "") + '" data-st="' + k + '">' + esc(word(k)) + '</button>').join("");
   $("leadBody").innerHTML =
-    '<button type="button" class="back" data-act="back" aria-label="' + L("סגירת הליד", "Close the lead") + '">✕ ' + L("סגירה", "Close") + '</button>' +
+    '<div class="leadbar"><button type="button" class="back" data-act="back" aria-label="' + L("סגירת הליד", "Close the lead") + '">✕ ' + L("סגירה", "Close") + '</button><span class="lb-name">' + esc(l.name) + '</span></div>' +
     '<h2 class="name">' + esc(l.name) + '</h2>' +
     (l.interest ? '<div class="about">' + esc(l.interest) + '</div>' : "") +
     (w ? '<div class="flag">' + esc(w) + '</div>' : "") +
     (e ? '<a class="giant" href="tel:' + esc(e) + '">' + PHONE + '<span>' + L("להתקשר", "Call") + '<small>' + esc(telShow(e)) + '</small></span></a>' : '<div class="giant off">' + L("אין מספר טלפון", "No phone number") + '</div>') +
     (e ? '<div class="two"><a class="soft" target="_blank" rel="noopener" href="https://wa.me/' + esc(e.slice(1)) + '">WhatsApp</a><button type="button" class="soft" data-act="copy" data-v="' + esc(telShow(e)) + '">' + L("העתקת מספר", "Copy number") + '</button></div>' : "") +
-    (l.changedBy ? '<div class="stampbig">' + esc(stampText(l)) + '</div>' : "") +
     callBlock(l) +
+    (l.changedBy ? '<div class="stampbig">' + esc(stampText(l)) + '</div>' : "") +
     (l.last && l.last.t ? '<div class="lastn">' + esc(l.last.t) + '<small>' + esc(l.last.by || "") + ' · ' + esc(when(l.last.at)) + '</small></div>' : "") +
     '<textarea id="noteBox" dir="auto" placeholder="' + L("לכתוב הערה (לא חובה)", "Write a note (optional)") + '"></textarea>' +
     '<button type="button" class="dark" data-act="noteonly">' + L("לשמור רק את ההערה", "Save the note only") + '</button>' +
@@ -481,7 +481,7 @@ async function copyHtml(html, plain) {
 }
 function leadLang(l) { return S.tplLang || (/hebrew/i.test(l.lang || "") || /[\u0590-\u05FF]/.test(l.name || "") ? "he" : "en"); }
 function callBlock(l) {
-  if (!l.fuAt || l.fuState === "Done") return '<button type="button" class="soft schedule" data-act="schedule">📅 ' + L("לקבוע שיחה", "Schedule a call") + '</button>';
+  if (!l.fuAt || l.fuState === "Done") return '<button type="button" class="soft schedule" data-act="schedule">📅 ' + L("לקבוע שיחת המשך", "Schedule a follow-up call") + '</button>';
   const lang = leadLang(l), late = l.fuAt < Date.now(), today = new Date(l.fuAt).toDateString() === new Date().toDateString();
   const hasMail = l.email && /@/.test(l.email), wa = tel(l.phone);
   const day = new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", { timeZone: "Asia/Jerusalem", weekday: "short", day: "numeric", month: "short" }).format(new Date(l.fuAt));
@@ -499,14 +499,38 @@ function callBlock(l) {
       (wa ? '<a class="cc-btn" target="_blank" rel="noopener" href="https://wa.me/' + esc(wa.slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + IWA + '<span>WhatsApp</span></a>' : '') +
     '</div>' +
     (hasMail ? '' : '<div class="cc-note">' + L("אין מייל לליד הזה, אז ההזמנה ביומן נשמרת רק אצלך.", "No email for this lead, so the calendar event is only for you.") + '</div>') +
-    '<div class="cc-copy"><span>' + L("העתקה:", "Copy:") + '</span>' +
-      '<button type="button" data-act="copywa">' + ICP + L("וואטסאפ", "WhatsApp") + '</button>' +
-      '<button type="button" data-act="copymail">' + ICP + L("מייל", "Email") + '</button>' +
-      '<button type="button" data-act="copysubj">' + ICP + L("נושא", "Subject") + '</button></div>' +
+    '<button type="button" class="cc-prev" data-act="preview">' + ICP + L("תצוגה מקדימה והעתקה של ההודעות", "Preview and copy the messages") + '</button>' +
     '<div class="cc-foot"><button type="button" class="cc-link" data-act="schedule">' + L("לשנות מועד", "Reschedule") + '</button>' +
       '<button type="button" class="cc-done" data-act="calldone">✓ ' + L("השיחה התקיימה", "Call done") + '</button></div>' +
     '</div>';
 }
+// preview: the exact WhatsApp message and email, with copy buttons, in English or Hebrew
+function previewDialog() {
+  const l = S.leads.get(S.open) || S.openCopy; if (!l) return;
+  const lang = leadLang(l), wa = tel(l.phone);
+  $("pvTtl").textContent = L("ההודעות ל", "Messages for ") + (l.name || "");
+  $("pvLang").innerHTML = '<button type="button" class="' + (lang === "en" ? "on" : "") + '" data-pv="en">English</button><button type="button" class="' + (lang === "he" ? "on" : "") + '" data-pv="he">עברית</button>';
+  $("pvWaH").textContent = "WhatsApp";
+  $("pvWa").textContent = waText(l, lang); $("pvWa").dir = lang === "he" ? "rtl" : "ltr";
+  $("pvWaBtns").innerHTML = '<button type="button" class="soft" data-act="copywa">' + L("העתקה", "Copy") + '</button>' +
+    (wa ? '<a class="soft" target="_blank" rel="noopener" href="https://wa.me/' + esc(wa.slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + L("פתיחה בוואטסאפ", "Open in WhatsApp") + '</a>' : '');
+  $("pvMailH").textContent = L("מייל", "Email");
+  $("pvSubj").textContent = L("נושא: ", "Subject: ") + mailSubject(l, lang);
+  $("pvMail").innerHTML = mailHtml(l, lang);
+  $("pvMailBtns").innerHTML = '<button type="button" class="soft" data-act="copysubj">' + L("העתקת הנושא", "Copy subject") + '</button><button type="button" class="soft" data-act="copymail">' + L("העתקת המייל", "Copy email") + '</button>';
+  $("pvTip").textContent = L("מדביקים את המייל בגוף הודעה חדשה ב-Gmail. הטקסטים הם טיוטה עד שמתן מאשר.", "Paste the email into the body of a new Gmail message. These texts are drafts until Matan approves them.");
+  $("pvClose").textContent = L("סגירה", "Close");
+  $("prevDlg").hidden = false;
+}
+$("prevDlg").addEventListener("click", (ev) => {
+  if (ev.target.id === "prevDlg" || ev.target.id === "pvClose") { $("prevDlg").hidden = true; return; }
+  const pv = ev.target.closest("[data-pv]"); if (pv) { S.tplLang = pv.dataset.pv; previewDialog(); renderLead(S.open, false); return; }
+  const t = ev.target.closest("[data-act]"); if (!t) return;
+  const l = S.leads.get(S.open) || S.openCopy; if (!l) return; const lang = leadLang(l);
+  if (t.dataset.act === "copywa") copyText(waText(l, lang));
+  if (t.dataset.act === "copysubj") copyText(mailSubject(l, lang));
+  if (t.dataset.act === "copymail") copyHtml(mailHtml(l, lang), mailPlain(l, lang));
+});
 function scheduleDialog() {
   const l = S.leads.get(S.open) || S.openCopy; if (!l) return;
   const now = new Date(Date.now() + 864e5), d = l.fuAt && l.fuState !== "Done" ? new Date(l.fuAt) : now;
@@ -639,6 +663,7 @@ $("leadBody").addEventListener("click", (ev) => {
   if (t.dataset.act === "delete") { askDelete(); return; }
   if (t.dataset.act === "schedule") { scheduleDialog(); return; }
   if (t.dataset.act === "calldone") { callDone(); return; }
+  if (t.dataset.act === "preview") { previewDialog(); return; }
   if (t.dataset.tpl) { S.tplLang = t.dataset.tpl; renderLead(S.open, false); return; }
   if (t.dataset.act === "copywa" || t.dataset.act === "copymail" || t.dataset.act === "copysubj") {
     const l = S.leads.get(S.open) || S.openCopy; if (!l) return; const lang = leadLang(l);
