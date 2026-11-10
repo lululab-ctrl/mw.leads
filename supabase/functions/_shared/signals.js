@@ -119,7 +119,7 @@ export function stamp(prev, s, logs) {
   let best = { changed_by: prev.changed_by || "", changed_at: Number(prev.changed_at || 0), changed_what: prev.changed_what || "" };
   const cands = [];
   if (s && s.last) cands.push({ by: s.last.by, at: s.last.at, what: NA_RE.test(s.last.t) ? "No answer" : "Note" });
-  for (const l of logs || []) if (l.to) cands.push({ by: l.by, at: l.at, what: "Status → " + l.to });
+  for (const l of logs || []) if (l.to && l.by !== "monday automation") cands.push({ by: l.by, at: l.at, what: "Status → " + l.to });
   for (const c of cands) if (c.by && c.at > best.changed_at + 5000) best = { changed_by: c.by, changed_at: c.at, changed_what: c.what };
   return best;
 }

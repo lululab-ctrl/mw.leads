@@ -80,7 +80,8 @@ Deno.serve(async (req) => {
         { f: fromIso },
       );
       const logs = (a?.boards?.[0]?.activity_logs || []).map(statusLog).filter(Boolean);
-      const ids = [...new Set(logs.map((l: any) => l.user_id).filter(Boolean))];
+      // automations have negative user ids: they aren't people, so they're named "monday automation"
+      const ids = [...new Set(logs.map((l: any) => l.user_id).filter((x: string) => Number(x) > 0))];
       const names: Record<string, string> = {};
       if (ids.length) {
         const u = await monday(`query ($i: [ID!]) { users(ids: $i) { id name } }`, { i: ids });
@@ -91,7 +92,7 @@ Deno.serve(async (req) => {
       for (const l of logs as any[]) {
         const dup = (appSt || []).some((r: any) => r.lead_id === l.lead_id && Math.abs(Number(r.at) - l.at) < 120000 && String(r.text).includes("→ " + l.to));
         if (dup) continue;
-        l.by = names[l.user_id] || "monday";
+        l.by = Number(l.user_id) > 0 ? (names[l.user_id] || "monday") : "monday automation";
         (logsByLead[l.lead_id] ||= []).push(l);
         statusRows.push({ id: "st-" + l.lead_id + "-" + l.at, lead_id: l.lead_id, kind: "status", text: (l.from || "—") + " → " + l.to, by: l.by, at: l.at, source: "monday", bot: false });
       }
