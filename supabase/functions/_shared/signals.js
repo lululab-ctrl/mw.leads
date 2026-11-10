@@ -174,3 +174,36 @@ export function stamp(prev, s, logs) {
   for (const c of cands) if (c.by && c.at > best.changed_at + 5000) best = { changed_by: c.by, changed_at: c.at, changed_what: c.what };
   return best;
 }
+
+// "Last change in MWP Leads" in monday: the lead's whole history, newest first, one line each,
+// with who really did it (Jeinna, 10 Nov 2026). Claude's notes and automatic emails posted under
+// a person's monday account are labelled as such, so nobody is credited with work they didn't do.
+export const CLAUDE_RE = /\(\d{1,2}\.\d{1,2}(\.\d{2,4})?, ?Claude/;
+export function histWho(r) {
+  const t = String(r.text || "");
+  if (r.bot || r.by === "Flow Admin" || r.by === "monday automation" || AUTO_RE.test(t) || CB_RE.test(t) || RET_RE.test(t)) return "Automation";
+  if (CLAUDE_RE.test(t)) return "Claude";
+  return r.by || "—";
+}
+export function histLine(r) {
+  const one = (x, n) => { x = String(x || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
+  const what = r.kind === "status" ? "Status " + one(String(r.text || "").replace(/\[object Object\]/g, "—"), 80)
+    : r.kind === "call" ? (r.text === "done" ? "Follow-up call done" : "Follow-up call set: " + one(r.text, 80))
+    : one(unsign(r.text), 140);
+  return whenIL(Number(r.at)) + " · " + histWho(r) + " · " + what;
+}
+export function historyText(rows, max = 1900) {
+  rows = [...rows].filter((r) => r && r.at);
+  // a status change made by Claude shows under the person's monday account, a moment before Claude's note
+  const claude = rows.filter((r) => r.kind === "note" && CLAUDE_RE.test(String(r.text || "")));
+  rows = rows.map((r) => r.kind === "status" && claude.some((n) => n.by === r.by && Math.abs(Number(n.at) - Number(r.at)) < 180000) ? { ...r, by: "Claude" } : r);
+  const lines = rows.sort((a, b) => Number(b.at) - Number(a.at)).map(histLine);
+  let out = "";
+  for (let i = 0; i < lines.length; i++) {
+    const more = lines.length - i;
+    const next = (out ? out + "\n" : "") + lines[i];
+    if (next.length > max - 40) return out + "\n… " + more + " older in MWP Leads";
+    out = next;
+  }
+  return out;
+}

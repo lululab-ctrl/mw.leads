@@ -2,7 +2,7 @@
 // Matan's page. Called every minute by pg_cron (x-cron-secret) and by the page's Refresh
 // button / auto-refresh (a signed-in team member).
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
-import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
+import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, historyText, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
 
 // only the columns MWP Leads uses (Follow Up Date's value carries its time)
 const BASIC = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate, C.fu];
@@ -140,9 +140,41 @@ Deno.serve(async (req) => {
       if (gone.length) { await db.from("leads").delete().in("id", gone); removed = gone.length; }
     }
 
+    // 5. the lead's history to monday's "Last change in MWP Leads" column, for every lead whose history
+    // changed since it was last written (25 a minute, so a first fill spreads over a few minutes)
+    let histSent = 0;
+    try {
+      const all: any[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data } = await db.from("lead_updates").select("lead_id,kind,text,by,at,bot").range(from, from + 999);
+        all.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      const byLead: Record<string, any[]> = {};
+      for (const r of all) (byLead[r.lead_id] ||= []).push(r);
+      const { data: sentRows } = await db.from("lead_hist").select("lead_id,text");
+      const sent = new Map((sentRows || []).map((r: any) => [r.lead_id, r.text]));
+      const todo: { id: string; v: string }[] = [];
+      for (const id of seen) {
+        const rows = byLead[id];
+        if (!rows || !rows.length) continue;
+        const v = historyText(rows);
+        if (sent.get(id) !== v) todo.push({ id, v });
+        if (todo.length >= 25) break;
+      }
+      if (todo.length) {
+        const q = todo.map((t, i) => `u${i}: change_simple_column_value(board_id: ${BOARD}, item_id: ${t.id}, column_id: "${C.who}", value: $v${i}) { id }`).join("\n");
+        const vars: Record<string, string> = {};
+        todo.forEach((t, i) => { vars["v" + i] = t.v; });
+        await monday(`mutation (${todo.map((_, i) => "$v" + i + ": String!").join(", ")}) {\n${q}\n}`, vars);
+        await db.from("lead_hist").upsert(todo.map((t) => ({ lead_id: t.id, text: t.v, at: Date.now() })));
+        histSent = todo.length;
+      }
+    } catch (e) { console.log("history to monday skipped", String((e as Error).message)); }
+
     const at = Date.now();
     await db.from("sync_meta").update({ at, running_until: null, last_error: null }).eq("id", 1);
-    return json({ ok: true, at, items: kept.length, changed: upserts.length, removed, updates: ups.length });
+    return json({ ok: true, at, items: kept.length, changed: upserts.length, removed, updates: ups.length, histSent });
   } catch (e) {
     const code = e instanceof MondayError ? e.code : "error";
     await db.from("sync_meta").update({ running_until: null, last_error: code + ": " + String((e as Error).message).slice(0, 300), last_error_at: new Date().toISOString() }).eq("id", 1);
