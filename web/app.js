@@ -185,6 +185,7 @@ async function openLead(id) {
   const c = await claim(id);
   if (!c.ok) { toast((c.by || "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now"), true); return; }
   S.open = id; S.hist = []; S.openCopy = l;
+  try { localStorage.setItem("mwpl.open", id); } catch (_) {} // a refresh opens it again; only Close forgets it
   // where the list was and which section the lead was in, to come back to the same place on Close
   S.listY = window.scrollY; S.openSec = secOf(id);
   clearInterval(S.hb); S.hb = setInterval(() => { if (S.open) claim(S.open); }, 60000);
@@ -216,10 +217,12 @@ function renderLead(id, fresh) {
     '<a class="mon" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(l.id) + '">' + L("פתיחה ב-monday", "Open in monday") + '</a>' +
     '<button type="button" class="trash" data-act="delete" aria-label="' + L("מחיקת הליד", "Delete this lead") + '" title="' + L("מחיקת הליד", "Delete this lead") + '">' + TRASH + '</button>';
   $("lead").hidden = false; $("lead").scrollTop = keep; $("home").hidden = true;
+  try { const dr = localStorage.getItem("mwpl.draft." + id); if (dr && fresh) $("noteBox").value = dr; } catch (_) {}
   renderHist();
 }
 function closeLead() {
   const id = S.open; S.open = null; S.openCopy = null; clearInterval(S.hb); release(id);
+  try { localStorage.removeItem("mwpl.open"); } catch (_) {}
   $("lead").hidden = true; $("home").hidden = !S.user;
   render();
   window.scrollTo(0, S.listY || 0); // back exactly where you were
@@ -306,6 +309,7 @@ async function finish(label, noAnswer, reason) {
   const bs = $("leadBody").querySelectorAll("button"); bs.forEach((b) => { b.disabled = true; });
   try {
     const j = await fn("act", { id, label, noAnswer, reason, note: text });
+    try { localStorage.removeItem("mwpl.draft." + id); } catch (_) {}
     const nl = fromRow(Object.assign(toRow(l), j.fields || {}));
     S.openCopy = nl; patch(id, nl);
     toast(label ? L("נשמר: ", "Saved: ") + word(label) : L("נשמר", "Saved"));
@@ -351,6 +355,10 @@ $("leadBody").addEventListener("click", (ev) => {
     const v = t.dataset.v;
     (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast(L("המספר הועתק", "Number copied"))).catch(() => toast(v));
   }
+});
+$("leadBody").addEventListener("input", (ev) => {
+  if (ev.target.id !== "noteBox" || !S.open) return;
+  try { const v = ev.target.value; if (v.trim()) localStorage.setItem("mwpl.draft." + S.open, v); else localStorage.removeItem("mwpl.draft." + S.open); } catch (_) {}
 });
 $("q").addEventListener("input", function () { S.q = this.value; draw(); });
 $("tabs").addEventListener("click", (ev) => {
@@ -506,6 +514,9 @@ async function start(user) {
   S.me = me || null;
   if (!me) { S.dbReady = true; banner(L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list."), ""); render(); return; }
   await Promise.all([loadAll(), loadMeta(), loadLocks()]);
+  // a lead that was open before a refresh opens again
+  let was = null; try { was = localStorage.getItem("mwpl.open"); } catch (_) {}
+  if (was && S.leads.has(was)) openLead(was); else if (was) { try { localStorage.removeItem("mwpl.open"); } catch (_) {} }
   sb.channel("leads-live")
     .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, (p) => {
       if (p.eventType === "DELETE") { S.leads.delete(p.old.id); } else if (p.new) { S.leads.set(p.new.id, fromRow(p.new)); }
