@@ -679,16 +679,6 @@ $("leadBody").addEventListener("click", (ev) => {
     (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast(L("המספר הועתק", "Number copied"))).catch(() => toast(v));
   }
 });
-// Close floats at the top: it slides away while you scroll down and comes back when you scroll up
-(function () {
-  let lastY = 0;
-  $("lead").addEventListener("scroll", () => {
-    const y = $("lead").scrollTop, b = document.querySelector("#lead .back"); if (!b) return;
-    if (y < 40 || y < lastY - 6) b.classList.remove("tuck");
-    else if (y > lastY + 6) b.classList.add("tuck");
-    lastY = y;
-  }, { passive: true });
-})();
 $("leadBody").addEventListener("input", (ev) => {
   if (ev.target.id !== "noteBox" || !S.open) return;
   try { const v = ev.target.value; if (v.trim()) localStorage.setItem("mwpl.draft." + S.open, v); else localStorage.removeItem("mwpl.draft." + S.open); } catch (_) {}
