@@ -157,9 +157,7 @@ Deno.serve(async (req) => {
       const todo: { id: string; v: string }[] = [];
       // every lead on the board, Won and Lost included, so the last step is always there
       for (const id of new Set(items.map((it: any) => String(it.id)))) {
-        const rows = byLead[id];
-        if (!rows || !rows.length) continue;
-        const v = historyText(rows);
+        const v = historyText(byLead[id] || []);
         if (sent.get(id) !== v) todo.push({ id, v });
         if (todo.length >= 25) break;
       }

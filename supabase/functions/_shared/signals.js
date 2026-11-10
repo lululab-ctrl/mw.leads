@@ -198,12 +198,16 @@ export function historyText(rows, max = 1900) {
   const claude = rows.filter((r) => r.kind === "note" && CLAUDE_RE.test(String(r.text || "")));
   rows = rows.map((r) => r.kind === "status" && claude.some((n) => n.by === r.by && Math.abs(Number(n.at) - Number(r.at)) < 180000) ? { ...r, by: "Claude" } : r);
   const lines = rows.sort((a, b) => Number(b.at) - Number(a.at)).map(histLine);
+  // MWP Leads' record starts on 13.10.2026: say so, so an empty or short history is never read as "nobody did anything"
+  const foot = lines.length
+    ? "(MWP Leads history starts 13.10.2026; older notes are in this lead's Updates)"
+    : "No changes recorded in MWP Leads (its history starts 13.10.2026). Older notes are in this lead's Updates.";
   let out = "";
   for (let i = 0; i < lines.length; i++) {
     const more = lines.length - i;
     const next = (out ? out + "\n" : "") + lines[i];
-    if (next.length > max - 40) return out + "\n… " + more + " older in MWP Leads";
+    if (next.length > max - 40 - foot.length) return out + "\n… " + more + " older in MWP Leads\n" + foot;
     out = next;
   }
-  return out;
+  return (out ? out + "\n" : "") + foot;
 }
