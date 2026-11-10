@@ -329,7 +329,13 @@ $("siForm").addEventListener("submit", async (ev) => {
   $("siBtn").disabled = true;
   const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
   $("siBtn").disabled = false; m.hidden = false;
-  if (error) { m.className = "msg bad"; m.textContent = /not on the MWP Leads team|Database error/i.test(error.message) ? L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list.") : error.message; return; }
+  if (error) {
+    m.className = "msg bad";
+    m.textContent = /not on the MWP Leads team|Database error/i.test(error.message) ? L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list.")
+      : /rate limit|too many|security purposes/i.test(error.message) ? L("נשלחו יותר מדי מיילים בשעה האחרונה. מנסים שוב בעוד כמה דקות.", "Too many sign-in emails were sent in the last hour. Try again in a few minutes.")
+      : error.message;
+    return;
+  }
   m.className = "msg"; m.textContent = L("שלחנו קישור ל-", "We sent a link to ") + email + L(". פותחים אותו במכשיר הזה.", ". Open it on this device.");
 });
 
