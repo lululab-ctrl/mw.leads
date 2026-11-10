@@ -57,23 +57,6 @@ export function fuMoment(value) {
   if (!v.time) return { at: israelToUtc(v.date, "00:00"), hasTime: false, date: v.date }; // a date with no time
   return { at: Date.parse(v.date + "T" + v.time + "Z") || 0, hasTime: true };
 }
-// column types that hold nothing to read (buttons, sub-items, the activity widget)
-const SKIP_TYPES = ["name", "button", "subtasks", "unsupported", "custom"];
-// every filled-in column, in the board's order: [{ t: title, v: text }]
-export function allDetails(it, columns) {
-  const byId = {};
-  for (const c of it.column_values || []) byId[c.id] = c;
-  const out = [];
-  for (const col of columns || []) {
-    if (SKIP_TYPES.includes(col.type)) continue;
-    const c = byId[col.id]; if (!c) continue;
-    let t = c.text == null ? "" : String(c.text).trim();
-    if (col.type === "checkbox") { let v = c.value; try { v = JSON.parse(v); } catch (_) {} t = v && v.checked ? "✓" : ""; }
-    if (!t) continue;
-    out.push({ t: col.title, v: t.slice(0, 2000) });
-  }
-  return out;
-}
 
 export function fromItem(it) {
   const cv = {}, vals = {};
@@ -143,7 +126,6 @@ const KEYS = ["name", "status", "phone", "email", "source", "interest", "about",
 export function differs(a, b) {
   for (const k of KEYS) if ((a[k] || "") !== (b[k] || "")) return true;
   if (!!a.fu_has_time !== !!b.fu_has_time) return true;
-  if (JSON.stringify(a.details || []) !== JSON.stringify(b.details || [])) return true;
   return false;
 }
 

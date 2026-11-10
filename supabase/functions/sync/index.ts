@@ -2,12 +2,10 @@
 // Matan's page. Called every minute by pg_cron (x-cron-secret) and by the page's Refresh
 // button / auto-refresh (a signed-in team member).
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
-import { BOARD, C, SKIP_GROUPS, allDetails, differs, fromItem, historyRow, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
+import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
 
-// every column (MWP Leads shows all of them); the board's own column list gives titles and order.
-// If monday refuses the big read, the basic columns are read instead and the details stay as they were.
+// only the columns MWP Leads uses (Follow Up Date's value carries its time)
 const BASIC = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate, C.fu];
-const ALL_FIELDS = `id name created_at group { id } column_values { id text value }`;
 const BASIC_FIELDS = `id name created_at group { id } column_values(ids: ${JSON.stringify(BASIC)}) { id text value }`;
 
 function iso(d: Date) { return d.toISOString().slice(0, 10); }
@@ -50,16 +48,8 @@ Deno.serve(async (req) => {
       }
       return { out, done };
     };
-    let full = true, items: any[] = [], complete = false;
-    try { const r = await readItems(ALL_FIELDS); items = r.out; complete = r.done; }
-    catch (e) {
-      if (!(e instanceof MondayError) || e.code !== "tool_error") throw e;
-      console.log("full read refused, reading the basic columns", String((e as Error).message).slice(0, 200));
-      full = false; const r = await readItems(BASIC_FIELDS); items = r.out; complete = r.done;
-    }
+    const r0 = await readItems(BASIC_FIELDS); const items = r0.out, complete = r0.done;
     const kept = items.filter((it) => !SKIP_GROUPS.includes(it.group?.id));
-    const cb = await monday(`query { boards(ids: [${BOARD}]) { columns { id title type } } }`);
-    const boardCols = cb?.boards?.[0]?.columns || [];
 
     // 2. updates: 30 days on the first pass, then 2 days; 100 a page, up to 8 pages
     let ups: any[] = [];
@@ -130,13 +120,10 @@ Deno.serve(async (req) => {
     const upserts: any[] = [];
     for (const it of kept) {
       const row: any = fromItem(it);
-      if (full) row.details = allDetails(it, boardCols);
       if (!row.id) continue;
       seen.add(row.id);
       const prev: any = prevById.get(row.id);
       if (prev && Number(prev.touch || 0) > started - 30000) continue;
-      if (!full) row.details = (prev && prev.details) || [];
-      // basic read: monday's Follow Up Date time is still read, so this stays right
       merge(row, prev, sig[row.id]);
       Object.assign(row, stamp(prev, sig[row.id], logsByLead[row.id]));
       if (!prev || differs(prev, row)) upserts.push({ ...row, synced_at: new Date().toISOString() });

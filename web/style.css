@@ -249,13 +249,3 @@ button{cursor:pointer}
 .pv-subj{font-size:14px;font-weight:700;unicode-bidi:plaintext}
 .pv-mail{border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .pv-tip{margin:0;color:var(--muted);font-size:13px}
-/* all details from monday */
-.mdet{border:1.5px solid var(--line);border-radius:16px;padding:0 14px;background:var(--bg)}
-.mdet summary{cursor:pointer;font-weight:700;font-size:16px;padding:14px 0;list-style:none}
-.mdet summary::-webkit-details-marker{display:none}
-.mdet summary::after{content:" ▾";color:var(--muted)}
-.mdet[open] summary::after{content:" ▴"}
-.mdet summary span{color:var(--muted);font-weight:500}
-.mdet dl{margin:0 0 12px;display:grid;grid-template-columns:minmax(0,40%) minmax(0,60%);gap:8px 12px;font-size:14px}
-.mdet dt{color:var(--muted)}
-.mdet dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;unicode-bidi:plaintext;text-align:start}

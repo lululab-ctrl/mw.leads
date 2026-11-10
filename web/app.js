@@ -59,7 +59,7 @@ function fromRow(r) {
     ret: +r.ret || 0, na: r.na || 0, last: r.last_t ? { t: r.last_t, at: +r.last_at || 0, by: r.last_by || "" } : null,
     stAt: +r.st_at || 0, touch: +r.touch || 0,
     changedBy: r.changed_by || "", changedAt: +r.changed_at || 0, changedWhat: r.changed_what || "",
-    fuAt: +r.fu_at || 0, fuState: r.fu_state || "", fuHasTime: !!r.fu_has_time, details: Array.isArray(r.details) ? r.details : [] };
+    fuAt: +r.fu_at || 0, fuState: r.fu_state || "", fuHasTime: !!r.fu_has_time };
 }
 
 /* ---------- stamps and locks ---------- */
@@ -237,7 +237,6 @@ function renderLead(id, fresh) {
     '<div class="two" id="answers"><button type="button" class="big wide st-na" data-na="1">' + L("לא ענה/תה", "No answer") + '</button>' + btns + '</div>' +
     '<div id="lostWhy" hidden><div class="q">Lost reason</div><div class="two" style="margin-top:10px">' + LOST.map((r) => '<button type="button" class="soft" data-lost="' + r[0] + '">' + r[0] + '</button>').join('') + '</div></div>' +
     focusButtons(l) +
-    detailsBlock(l) +
     '<div class="q">' + L("היסטוריה", "History") + '</div><div id="hist" class="hist"></div>' +
     '<div class="leadfoot"><a class="mon" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(l.id) + '">' + L("פתיחה ב-monday", "Open in monday") + '</a>' +
     (S.me && S.me.can_delete ? '<button type="button" class="trash" data-act="delete" aria-label="' + L("מחיקת הליד", "Delete this lead") + '" title="' + L("מחיקת הליד", "Delete this lead") + '">' + TRASH + '</button>' : '') + '</div>'; // only Matan and Jeinna can delete
@@ -579,13 +578,6 @@ async function callDone() {
   } catch (e) { toast(errText(e), true); }
 }
 // any follow-up date in monday counts, with or without a time; Done and Lost don't
-// every filled-in column from monday's Leads board, as it is there (Jeinna, 10 Nov 2026)
-function detailsBlock(l) {
-  const d = l.details || [];
-  if (!d.length) return "";
-  return '<details class="mdet"><summary>' + L("כל הפרטים מ-monday", "All details from monday") + ' <span>' + d.length + '</span></summary><dl>' +
-    d.map((x) => '<dt>' + esc(x.t) + '</dt><dd dir="auto">' + esc(x.v) + '</dd>').join("") + '</dl></details>';
-}
 function isCall(l) { return !!l.fuAt && l.fuState !== "Done" && l.fuState !== "Lost"; }
 
 /* ---------- delete a lead (here and in monday), after "Are you sure?" ---------- */
@@ -651,7 +643,7 @@ function toRow(l) {
   return { id: l.id, name: l.name, status: l.status, phone: l.phone, email: l.email, source: l.source, interest: l.interest, about: l.about,
     lang: l.lang, fu_date: l.fuDate, created: l.created, ecb: l.ecb, mcb: l.mcb, ret: l.ret, na: l.na,
     last_t: l.last ? l.last.t : null, last_at: l.last ? l.last.at : 0, last_by: l.last ? l.last.by : "", st_at: l.stAt, touch: l.touch,
-    changed_by: l.changedBy, changed_at: l.changedAt, changed_what: l.changedWhat, fu_at: l.fuAt, fu_state: l.fuState, fu_has_time: l.fuHasTime, details: l.details };
+    changed_by: l.changedBy, changed_at: l.changedAt, changed_what: l.changedWhat, fu_at: l.fuAt, fu_state: l.fuState, fu_has_time: l.fuHasTime };
 }
 function patch(id, l) { l.id = id; S.leads.set(id, l); draw(); }
 
