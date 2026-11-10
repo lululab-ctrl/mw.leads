@@ -65,7 +65,7 @@ export function signals(updates, authors) {
     if (!bot && NA_RE.test(t)) s.na++;
     if (RET_RE.test(t)) s.ret = Math.max(s.ret, at);
     if (!bot && !isCb && t && t.charAt(0) !== "@" && (!s.last || at > s.last.at)) {
-      s.last = { t: t.slice(0, 400), at, by: noteBy(t, u.creator && u.creator.name, authors[String(u.id)]) };
+      s.last = { t: cleanNote(t).slice(0, 400), at, by: noteBy(t, u.creator && u.creator.name, authors[String(u.id)]) };
     }
   }
   return sig;
@@ -95,16 +95,26 @@ export function differs(a, b) {
 // HTML body for a note posted to monday, signed with the real person's name
 export function noteHtml(text, by) {
   const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  return "<p>" + esc(text).replace(/\n/g, "<br>") + "<br>— " + esc(by) + "</p>";
+  // the name leads (monday's notifications show the first words) and closes the note (how the app reads it back)
+  return "<p><b>" + esc(by) + ":</b> " + esc(text).replace(/\n/g, "<br>") + "<br>— " + esc(by) + "</p>";
 }
 
 // monday update → a history row
+// "Eliran: text\n— Eliran" → "text" (the name is shown separately)
+export function cleanNote(t, by) {
+  t = String(t || "");
+  const m = SIGN_RE.exec(t);
+  if (m) { t = t.slice(0, m.index); if (t.startsWith(m[1].trim() + ": ")) t = t.slice(m[1].trim().length + 2); }
+  else if (by && t.startsWith(by + ": ")) t = t.slice(by.length + 2);
+  return t.trim();
+}
+
 export function historyRow(u, authors) {
   authors = authors || {};
   const t = String(u.text_body || "").trim();
   const bot = String((u.creator && u.creator.id) || "") === BOT;
   return {
-    id: String(u.id), lead_id: String(u.item_id || ""), kind: "note", text: t.slice(0, 4000),
+    id: String(u.id), lead_id: String(u.item_id || ""), kind: "note", text: (bot ? t : cleanNote(t)).slice(0, 4000),
     by: bot ? "Flow Admin" : noteBy(t, u.creator && u.creator.name, authors[String(u.id)]), at: Date.parse(u.created_at) || 0, source: "monday", bot,
   };
 }
