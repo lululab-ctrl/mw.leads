@@ -14,9 +14,14 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
   const db = admin();
 
-  // spaces and line breaks are ignored on both sides (a pasted secret often ends with a line break)
-  const cronSecret = (Deno.env.get("CRON_SECRET") || "").replace(/\s+/g, "");
-  const fromCron = !!cronSecret && (req.headers.get("x-cron-secret") || "").replace(/\s+/g, "") === cronSecret;
+  // the every-minute job: its secret must match the Vault copy it was sent with
+  const sent = req.headers.get("x-cron-secret") || "";
+  let fromCron = false;
+  if (sent) {
+    const { data, error } = await db.rpc("cron_secret_ok", { s: sent });
+    fromCron = data === true;
+    if (!fromCron) console.log("cron secret refused", error ? error.message : "no match");
+  }
   if (!fromCron && !(await teamMember(req, db))) return json({ error: "not_team" }, 403);
 
   // a manual refresh skips a sync that finished under 10 seconds ago
