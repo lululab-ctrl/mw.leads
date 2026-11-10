@@ -1,7 +1,7 @@
 // One press on the lead screen: save the note (if any) and the answer to monday, as the
 // original page's finish(). The note is signed "— Name" so monday shows who really did it.
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
-import { BOARD, C, LOST, STATUSES } from "../_shared/signals.js";
+import { BOARD, C, LOST, STATUSES, noteHtml } from "../_shared/signals.js";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -34,25 +34,19 @@ Deno.serve(async (req) => {
   if (!label && !text) return json({ error: "note_required" }, 400);
 
   const kind = label ? "status" : noAnswer ? "no_answer" : "note";
-  // monday gets only the note itself, no names (Jeinna, 10 Nov 2026); who did it is kept here
-  // (note_authors, lead_updates, the stamp). A connected personal monday account is used when present.
-  const { data: mine } = await db.from("monday_tokens").select("token").eq("email", me.email).maybeSingle();
-  const own = mine?.token || undefined;
   const fields: Record<string, unknown> = {};
   let updateId: string | null = null;
   try {
     if (text) {
-      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: "<p>" + text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)).replace(/\n/g, "<br>") + "</p>" }, own);
+      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: noteHtml(text, me.name) });
       updateId = d?.create_update?.id ? String(d.create_update.id) : null;
       fields.last_t = text.slice(0, 400); fields.last_at = Date.now(); fields.last_by = me.name;
-      // monday shows the token's owner as the author; remember the real one for the sync and the history
-      if (updateId) await db.from("note_authors").upsert({ update_id: updateId, by: me.name, why: "MWP Leads" });
     }
     if (noAnswer) fields.na = (l.na || 0) + 1;
     if (label && label !== l.status) {
       const cols: Record<string, unknown> = { [C.status]: { label } };
       if (reason) cols[C.lost] = { label: reason };
-      await monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) }, own);
+      await monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) });
       fields.status = label;
     }
     if (label) fields.st_at = Date.now();
@@ -71,8 +65,7 @@ Deno.serve(async (req) => {
     if (rows.length) await db.from("lead_updates").upsert(rows);
     return json({ ok: true, fields });
   } catch (e) {
-    let code = e instanceof MondayError ? e.code : "error";
-    if (own && code === "needs_reauth") code = "own_token"; // their own monday connection stopped working
+    const code = e instanceof MondayError ? e.code : "error";
     const message = String((e as Error).message);
     await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind, status_from: l.status, status_to: label, lost_reason: reason, note: text || null, monday_update_id: updateId, ok: false, error: code + ": " + message.slice(0, 300) });
     return json({ ok: false, code, message }, code === "no_token" ? 503 : 502);

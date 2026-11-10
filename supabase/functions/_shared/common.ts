@@ -32,9 +32,9 @@ export class MondayError extends Error {
   constructor(code: string, message: string) { super(message); this.code = code; }
 }
 
-// one call to monday's API: with a person's own token when given, else the shared token
-export async function monday(query: string, variables: Record<string, unknown> = {}, personal?: string) {
-  const token = personal || Deno.env.get("MONDAY_API_TOKEN");
+// one call to monday's API with the shop's token
+export async function monday(query: string, variables: Record<string, unknown> = {}) {
+  const token = Deno.env.get("MONDAY_API_TOKEN");
   if (!token) throw new MondayError("no_token", "The monday API token isn't set yet");
   const r = await fetch("https://api.monday.com/v2", {
     method: "POST",

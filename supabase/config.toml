@@ -7,6 +7,3 @@ verify_jwt = false
 
 [functions.act]
 verify_jwt = false
-
-[functions.connect]
-verify_jwt = false

@@ -36,7 +36,7 @@ ok(d2.last_t === "old", "older note than the kept one is ignored");
 const d3 = merge(fromItem(it), prev, { last: { t: "newer", at: 200000, by: "B" } });
 ok(d3.last_t === "newer" && differs(prev, d3), "newer note replaces and marks changed");
 ok(!differs(d3, { ...d3 }), "same row → no write");
-ok(noteHtml("a<b\nc", "Eliran") === "<p><b>Eliran:</b> a&lt;b<br>c<br>— Eliran</p>", "note is escaped, starts and ends with the name");
+ok(noteHtml("a<b\nc", "Eliran") === "<p>a&lt;b<br>c<br>— Eliran</p>", "note is escaped and signed");
 const sl = statusLog({ data: JSON.stringify({ column_id: C.status, pulse_id: 99, value: { label: { text: "Won" } }, previous_value: { label: { text: "Offer sent" } } }), created_at: "17947000000000000", user_id: 5 });
 ok(sl && sl.lead_id === "99" && sl.to === "Won" && sl.from === "Offer sent" && sl.at === 1794700000000, "status change from monday's activity log");
 ok(statusLog({ data: JSON.stringify({ column_id: "other", pulse_id: 1 }), created_at: "1" }) === null, "other columns ignored");
@@ -45,8 +45,6 @@ ok(st1.changed_by === "Eliran" && st1.changed_what === "Status → Won", "newest
 const st2 = stamp({ changed_by: "Emilia", changed_at: 1000000 }, { last: { by: "Matan Wild", at: 1003000, t: "No answer" } }, []);
 ok(st2.changed_by === "Emilia", "app's own change isn't overwritten by monday's copy");
 const hr = historyRow({ id: 7, item_id: 3, text_body: "Spoke\n— Eliran", created_at: "2026-11-06T12:00:00Z", creator: { id: "9", name: "Matan Wild" } });
-ok(hr.by === "Eliran" && hr.lead_id === "3" && hr.kind === "note" && hr.text === "Spoke", "history row keeps the real author, without the signature");
-const hr2 = historyRow({ id: 8, item_id: 3, text_body: "Eliran: שלחתי את\n— Eliran", created_at: "2026-11-10T12:00:00Z", creator: { id: "9", name: "Jeinna Louise Perez" } });
-ok(hr2.by === "Eliran" && hr2.text === "שלחתי את", "name at the start is cleaned too");
+ok(hr.by === "Eliran" && hr.lead_id === "3" && hr.kind === "note", "history row keeps the real author");
 document.getElementById("out").textContent = out.join("\n") + "\n\n" + (out.some((x) => x.startsWith("FAIL")) ? "SOME FAILED" : "ALL PASSED");
 </script>

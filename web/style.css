@@ -126,5 +126,3 @@ button{cursor:pointer}
 .pwbox .msg{border-radius:12px;padding:10px 12px;font-size:15px;background:var(--bg)}
 .pwbox .msg.bad{color:var(--hot)}
 #signin input + input{margin-top:0}
-.steps{margin:0;padding-inline-start:20px;font-size:15px;color:var(--fg);display:flex;flex-direction:column;gap:4px}
-.linkbtn{border:none;background:none;color:var(--hot);font-weight:700;padding:4px;align-self:flex-start}

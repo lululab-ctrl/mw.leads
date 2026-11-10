@@ -18,7 +18,7 @@ const ST = [
 const STM = {}; ST.forEach((s) => { STM[s.k] = s; });
 const LOST = [["Price", "מחיר"], ["Dates", "תאריכים"], ["Not a fit", "לא מתאים"], ["No response", "אין מענה"], ["Other", "אחר"]];
 const OPEN = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed"];
-const S = { mon: null, lang: "en", leads: new Map(), locks: new Map(), hist: [], hb: 0, q: "", open: null, user: null, me: null, syncing: false, syncAt: 0, metaAt: 0, dbReady: false, err: null, later: false };
+const S = { lang: "en", leads: new Map(), locks: new Map(), hist: [], hb: 0, q: "", open: null, user: null, me: null, syncing: false, syncAt: 0, metaAt: 0, dbReady: false, err: null, later: false };
 try { const sl = localStorage.getItem("mwpl.lang"); S.lang = sl || ((navigator.language || "").slice(0, 2) === "he" ? "he" : "en"); } catch (_) {}
 function L(he, en) { return S.lang === "he" ? he : en; }
 function $(id) { return document.getElementById(id); }
@@ -309,7 +309,6 @@ function banner(msg, kind, retry) {
 function errText(e) {
   const c = e && e.code;
   if (c === "no_token") return L("החיבור ל-monday עוד לא הוגדר (חסר מפתח API). הרשימה השמורה מוצגת.", "The monday connection isn't set up yet (no API token). Showing the saved list.");
-  if (c === "own_token") return L("החיבור של ה-monday שלך הפסיק לעבוד. מחברים שוב (למטה: חיבור ל-monday).", "Your own monday connection stopped working. Connect it again (bottom of the list: Connect my monday).");
   if (c === "needs_reauth") return L("monday דחה את מפתח ה-API. צריך מפתח חדש.", "monday refused the API token. A new token is needed.");
   if (c === "not_team" || c === "signed_out") return L("צריך להתחבר מחדש.", "Please sign in again.");
   if (c === "note_required") return L("קודם כותבים הערה", "Write a note first");
@@ -331,52 +330,7 @@ function renderSignin() {
   $("pwSave").textContent = L("שמירת הסיסמה", "Save password");
   $("pwLater").textContent = L("אחר כך", "Later");
   $("chpw").textContent = L("שינוי סיסמה", "Change password");
-  $("monBtn").textContent = S.mon && S.mon.connected ? L("monday: מחובר/ת", "monday: connected") : L("חיבור ל-monday", "Connect my monday");
-  $("monTtl").textContent = S.mon && S.mon.connected ? L("monday מחובר", "monday is connected") : L("חיבור ה-monday שלך", "Connect your monday account");
-  $("monSub").textContent = S.mon && S.mon.connected
-    ? L("מה שעושים כאן מופיע ב-monday בשם ", "What you do here shows in monday as ") + (S.mon.name || "") + "."
-    : L("כדי שהעדכונים שלך יופיעו ב-monday בשם שלך (בלי זה הם מופיעים בשם החשבון המשותף). מי שאין לו monday מדלג.", "So your updates show in monday under your own name (without it they show under the shared account). No monday account? Skip this.");
-  $("monSteps").innerHTML = S.mon && S.mon.connected ? "" : [
-    L("ב-monday לוחצים על תמונת הפרופיל (למעלה בצד)", "In monday, click your profile picture (top corner)"),
-    L("Developers ← My access tokens (או API token)", "Developers → My access tokens (or API token)"),
-    L("Show ← Copy, ומדביקים כאן", "Show → Copy, then paste it here")].map((t) => "<li>" + esc(t) + "</li>").join("");
-  $("monTok").hidden = !!(S.mon && S.mon.connected); $("monSave").hidden = !!(S.mon && S.mon.connected);
-  $("monTok").placeholder = L("המפתח מ-monday", "Your monday token");
-  $("monSave").textContent = L("חיבור", "Connect");
-  $("monLater").textContent = S.mon && S.mon.connected ? L("סגירה", "Close") : L("אחר כך", "Later");
-  $("monOff").hidden = !(S.mon && S.mon.connected); $("monOff").textContent = L("ניתוק monday", "Disconnect monday");
 }
-/* ---------- your own monday account: monday shows you as the author ---------- */
-async function loadMon() {
-  const { data } = await sb.rpc("my_monday");
-  S.mon = data || { connected: false };
-  renderSignin();
-  // ask once per device, not for Eliran (no monday login)
-  let asked = false; try { asked = localStorage.getItem("mwpl.monAsked") === "1"; } catch (_) {}
-  // not offered: the team works only here, without monday logins (Jeinna, 10 Nov 2026)
-}
-$("monBtn").addEventListener("click", () => { $("monMsg").hidden = true; $("monBox").hidden = false; window.scrollTo(0, 0); });
-$("monLater").addEventListener("click", () => { $("monBox").hidden = true; try { localStorage.setItem("mwpl.monAsked", "1"); } catch (_) {} });
-$("monOff").addEventListener("click", async () => {
-  try { await fn("connect", { disconnect: true }); S.mon = { connected: false }; renderSignin(); toast(L("monday נותק", "monday disconnected")); } catch (e) { toast(errText(e), true); }
-});
-$("monBox").addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  const m = $("monMsg"), tok = $("monTok").value.trim();
-  if (!tok) return;
-  $("monSave").disabled = true;
-  try {
-    const j = await fn("connect", { token: tok });
-    S.mon = { connected: true, name: j.name || "" }; $("monTok").value = ""; m.hidden = true;
-    renderSignin(); $("monBox").hidden = true;
-    try { localStorage.setItem("mwpl.monAsked", "1"); } catch (_) {}
-    toast(L("מחובר ל-monday בתור ", "Connected to monday as ") + (j.name || ""));
-  } catch (e) {
-    m.hidden = false; m.className = "msg bad";
-    m.textContent = e.code === "bad_token" ? L("monday לא קיבל את המפתח. מעתיקים אותו שוב, במלואו.", "monday didn't accept that token. Copy it again, all of it.") : errText(e);
-  }
-  $("monSave").disabled = false;
-});
 $("siForm").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const email = $("siEmail").value.trim().toLowerCase(), m = $("siMsg");
@@ -438,7 +392,7 @@ async function start(user) {
   const { data: me } = await sb.from("team").select("name,email").eq("email", (user.email || "").toLowerCase()).maybeSingle();
   S.me = me || null;
   if (!me) { S.dbReady = true; banner(L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list."), ""); render(); return; }
-  await Promise.all([loadAll(), loadMeta(), loadLocks(), loadMon()]);
+  await Promise.all([loadAll(), loadMeta(), loadLocks()]);
   sb.channel("leads-live")
     .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, (p) => {
       if (p.eventType === "DELETE") { S.leads.delete(p.old.id); } else if (p.new) { S.leads.set(p.new.id, fromRow(p.new)); }
