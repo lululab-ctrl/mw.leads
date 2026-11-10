@@ -316,43 +316,58 @@ function errText(e) {
   return L("monday לא עונה כרגע. מוצגת הרשימה האחרונה שנשמרה.", "monday isn't answering right now. Showing the last saved list.");
 }
 
-/* ---------- sign-in ---------- */
+/* ---------- sign-in: email + password (accounts are made by Jeinna in Supabase; no emails are sent) ---------- */
 function renderSignin() {
   $("siTtl").textContent = L("MWP לידים", "MWP Leads");
-  $("siSub").textContent = L("מתחברים עם המייל של הצוות. נשלח אליך קישור כניסה.", "Sign in with your team email. We'll email you a sign-in link.");
+  $("siSub").textContent = L("נכנסים עם המייל של הצוות והסיסמה.", "Sign in with your team email and password.");
   $("siEmail").placeholder = L("המייל שלך", "Your email");
-  $("siBtn").textContent = L("לשלוח לי קישור", "Email me a link");
-  $("siGoogle").innerHTML = GOOGLE + "<span>" + L("כניסה עם Google", "Sign in with Google") + "</span>";
-  $("siOr").textContent = L("או קישור במייל", "or an email link");
+  $("siPass").placeholder = L("סיסמה", "Password");
+  $("siBtn").textContent = L("כניסה", "Sign in");
+  $("pwTtl").textContent = L("בוחרים סיסמה משלך", "Choose your own password");
+  $("pwSub").textContent = L("נכנסת עם הסיסמה הזמנית. בוחרים סיסמה חדשה (לפחות 8 תווים).", "You signed in with the starting password. Choose a new one (at least 8 characters).");
+  $("pw1").placeholder = L("סיסמה חדשה", "New password");
+  $("pw2").placeholder = L("שוב, לבדיקה", "Again, to check");
+  $("pwSave").textContent = L("שמירת הסיסמה", "Save password");
+  $("pwLater").textContent = L("אחר כך", "Later");
+  $("chpw").textContent = L("שינוי סיסמה", "Change password");
 }
-const GOOGLE = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.6 28.6A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.2A24 24 0 0 0 0 24c0 3.9.9 7.5 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.1 1.4-4.9 2.3-8.2 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>';
-$("siGoogle").addEventListener("click", async () => {
-  const { error } = await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname, queryParams: { prompt: "select_account" } } });
-  if (error) { const m = $("siMsg"); m.hidden = false; m.className = "msg bad"; m.textContent = /not enabled|Unsupported provider/i.test(error.message) ? L("הכניסה עם Google עוד לא הוגדרה.", "Google sign-in isn't set up yet.") : error.message; }
-});
-// coming back from Google with an error (for example an email that isn't on the team)
-(function () {
-  const q = new URLSearchParams(location.search + "&" + location.hash.replace(/^#/, ""));
-  const e = q.get("error_description");
-  if (!e) return;
-  const m = $("siMsg"); m.hidden = false; m.className = "msg bad";
-  m.textContent = /Database error|not on the MWP Leads team/i.test(e) ? L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list.") : e;
-  history.replaceState(null, "", location.pathname);
-})();
 $("siForm").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const email = $("siEmail").value.trim().toLowerCase(), m = $("siMsg");
   $("siBtn").disabled = true;
-  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname } });
-  $("siBtn").disabled = false; m.hidden = false;
+  const { error } = await sb.auth.signInWithPassword({ email, password: $("siPass").value });
+  $("siBtn").disabled = false;
   if (error) {
-    m.className = "msg bad";
-    m.textContent = /not on the MWP Leads team|Database error/i.test(error.message) ? L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list.")
-      : /rate limit|too many|security purposes/i.test(error.message) ? L("נשלחו יותר מדי מיילים בשעה האחרונה. מנסים שוב בעוד כמה דקות.", "Too many sign-in emails were sent in the last hour. Try again in a few minutes.")
+    m.hidden = false; m.className = "msg bad";
+    m.textContent = /invalid login credentials/i.test(error.message) ? L("המייל או הסיסמה לא נכונים.", "Wrong email or password.")
+      : /rate limit|too many/i.test(error.message) ? L("יותר מדי ניסיונות. מנסים שוב בעוד כמה דקות.", "Too many tries. Try again in a few minutes.")
       : error.message;
     return;
   }
-  m.className = "msg"; m.textContent = L("שלחנו קישור ל-", "We sent a link to ") + email + L(". פותחים אותו במכשיר הזה.", ". Open it on this device.");
+  $("siPass").value = ""; m.hidden = true;
+});
+// the starting password must be replaced: until a person chooses their own, the box shows after every sign-in
+function needsPw(user) { return !!user && !(user.user_metadata && user.user_metadata.own_password); }
+function showPw(force) {
+  const box = $("pwBox");
+  box.hidden = !(force || needsPw(S.user));
+  $("pwLater").hidden = !!force ? false : false;
+  if (!box.hidden) { $("pwMsg").hidden = true; $("pw1").value = ""; $("pw2").value = ""; }
+}
+$("chpw").addEventListener("click", () => { showPw(true); window.scrollTo(0, 0); $("pw1").focus(); });
+$("pwLater").addEventListener("click", () => { $("pwBox").hidden = true; });
+$("pwBox").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const a = $("pw1").value, b = $("pw2").value, m = $("pwMsg");
+  m.hidden = false; m.className = "msg bad";
+  if (a.length < 8) { m.textContent = L("לפחות 8 תווים.", "At least 8 characters."); return; }
+  if (a !== b) { m.textContent = L("שתי הסיסמאות לא זהות.", "The two passwords don't match."); return; }
+  $("pwSave").disabled = true;
+  const { data, error } = await sb.auth.updateUser({ password: a, data: { own_password: true } });
+  $("pwSave").disabled = false;
+  if (error) { m.textContent = /same|different from the old/i.test(error.message) ? L("בוחרים סיסמה שונה מהקודמת.", "Choose a password different from the old one.") : error.message; return; }
+  if (data && data.user) S.user = data.user;
+  $("pwBox").hidden = true; toast(L("הסיסמה נשמרה", "Password saved"));
 });
 
 /* ---------- boot ---------- */
@@ -373,6 +388,7 @@ async function loadMeta() {
 async function start(user) {
   S.user = user;
   $("signin").hidden = true; $("home").hidden = false;
+  showPw(false);
   const { data: me } = await sb.from("team").select("name,email").eq("email", (user.email || "").toLowerCase()).maybeSingle();
   S.me = me || null;
   if (!me) { S.dbReady = true; banner(L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list."), ""); render(); return; }

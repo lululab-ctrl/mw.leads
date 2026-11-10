@@ -36,6 +36,8 @@
     auth: {
       getSession: async () => ({ data: { session: { access_token: "t", user: { email: "tester@example.com" } } } }),
       onAuthStateChange() {}, signOut: async () => {}, signInWithOtp: async () => ({ error: null }),
+      signInWithPassword: async () => ({ error: null }),
+      updateUser: async (u) => { window.__calls.push({ name: "updateUser", body: { hasPassword: !!u.password, data: u.data } }); return { data: { user: { email: "tester@example.com", user_metadata: u.data } }, error: null }; },
     },
     from: q,
     rpc: async (name, args) => { window.__calls.push({ name, body: args }); return { data: { ok: true }, error: null }; },

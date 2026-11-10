@@ -15,10 +15,9 @@
   <div id="signin" class="gut" hidden><div class="col">
     <h1 id="siTtl"></h1>
     <p id="siSub"></p>
-    <button class="giant google" id="siGoogle" type="button"></button>
-    <div class="or" id="siOr"></div>
     <form id="siForm">
-      <input id="siEmail" type="email" autocomplete="email" required>
+      <input id="siEmail" type="email" autocomplete="username" required>
+      <input id="siPass" type="password" autocomplete="current-password" required minlength="8">
       <button class="giant" id="siBtn" type="submit"></button>
     </form>
     <div id="siMsg" class="msg" hidden></div>
@@ -30,10 +29,18 @@
       <button class="sm" id="lang" type="button"></button>
     </div>
     <div id="banner" class="banner" hidden></div>
+    <form id="pwBox" class="pwbox" hidden>
+      <b id="pwTtl"></b>
+      <span id="pwSub"></span>
+      <input id="pw1" type="password" autocomplete="new-password" minlength="8" required>
+      <input id="pw2" type="password" autocomplete="new-password" minlength="8" required>
+      <div class="pwbtns"><button class="dark" id="pwSave" type="submit"></button><button class="soft" id="pwLater" type="button"></button></div>
+      <div id="pwMsg" class="msg" hidden></div>
+    </form>
     <input class="search" id="q" type="search" autocomplete="off">
     <div id="list"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
     <button class="later" id="later" type="button" hidden></button>
-    <div class="who"><span id="whoName"></span> · <button type="button" id="signout"></button></div>
+    <div class="who"><span id="whoName"></span> · <button type="button" id="chpw"></button> · <button type="button" id="signout"></button></div>
   </div></div>
   <div id="lead" class="gut" hidden><div class="col" id="leadBody"></div></div>
   <div class="toast" id="toast" hidden><div></div></div>
