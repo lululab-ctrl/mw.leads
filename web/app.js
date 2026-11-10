@@ -268,7 +268,7 @@ function secOf(id) {
 function TABS() { return [L("להתקשר קודם", "Call first"), L("בתהליך", "In progress"), L("ישנים, עוד לא חזרנו אליהם", "Old, never called"), L("טופלו היום", "Done today"), L("לחזור אליהם אחר כך", "Call later")]; }
 function secName(g) { return TABS()[g]; }
 // the order of the tabs and the sections: Old, never called comes last (Jeinna, 10 Nov 2026)
-const ORDER = [0, 1, 3, 4, 2];
+const ORDER = [0, 1, 4, 3, 2]; // Call first, In progress, (Follow-ups), Call later, Done today, Old never called
 async function loadHist(id) {
   const { data } = await sb.from("lead_updates").select("*").eq("lead_id", id).order("at", { ascending: false }).limit(40);
   if (S.open !== id) return;
