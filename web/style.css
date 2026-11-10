@@ -159,9 +159,9 @@ button{cursor:pointer}
 /* delete: a small trash button in the bottom corner of an open lead, then "Are you sure?" */
 .leadfoot{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .leadfoot .mon{align-self:center}
-.trash{flex:none;width:48px;height:48px;border-radius:50%;border:2px solid var(--line);background:var(--bg);color:var(--muted);display:grid;place-items:center}
-.trash svg{width:22px;height:22px}
-.trash:hover,.trash:focus-visible{color:var(--hot);border-color:var(--hot)}
+.trash{flex:none;width:40px;height:40px;border:none;background:none;color:var(--hot);display:grid;place-items:center;padding:0;border-radius:8px}
+.trash svg{width:18px;height:18px}
+.trash:hover{opacity:.75}
 .dlg{position:fixed;inset:0;z-index:30;background:rgba(50,51,56,.45);display:grid;place-items:center;padding:16px}
 .dlgbox{background:var(--bg);border-radius:20px;padding:20px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
 .dlgbox b{font-size:20px;font-weight:900;overflow-wrap:anywhere;unicode-bidi:plaintext}
