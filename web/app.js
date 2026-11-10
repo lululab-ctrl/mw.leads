@@ -18,7 +18,7 @@ const ST = [
 const STM = {}; ST.forEach((s) => { STM[s.k] = s; });
 const LOST = [["Price", "מחיר"], ["Dates", "תאריכים"], ["Not a fit", "לא מתאים"], ["No response", "אין מענה"], ["Other", "אחר"]];
 const OPEN = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed"];
-const S = { lang: "en", leads: new Map(), q: "", open: null, user: null, me: null, syncing: false, syncAt: 0, metaAt: 0, dbReady: false, err: null, later: false };
+const S = { lang: "en", leads: new Map(), locks: new Map(), hist: [], hb: 0, q: "", open: null, user: null, me: null, syncing: false, syncAt: 0, metaAt: 0, dbReady: false, err: null, later: false };
 try { const sl = localStorage.getItem("mwpl.lang"); S.lang = sl || ((navigator.language || "").slice(0, 2) === "he" ? "he" : "en"); } catch (_) {}
 function L(he, en) { return S.lang === "he" ? he : en; }
 function $(id) { return document.getElementById(id); }
@@ -57,8 +57,37 @@ function fromRow(r) {
   return { id: r.id, name: r.name, status: r.status, phone: r.phone, email: r.email, source: r.source, interest: r.interest,
     about: r.about, lang: r.lang, fuDate: r.fu_date, created: +r.created || 0, ecb: +r.ecb || 0, mcb: +r.mcb || 0,
     ret: +r.ret || 0, na: r.na || 0, last: r.last_t ? { t: r.last_t, at: +r.last_at || 0, by: r.last_by || "" } : null,
-    stAt: +r.st_at || 0, touch: +r.touch || 0 };
+    stAt: +r.st_at || 0, touch: +r.touch || 0,
+    changedBy: r.changed_by || "", changedAt: +r.changed_at || 0, changedWhat: r.changed_what || "" };
 }
+
+/* ---------- stamps and locks ---------- */
+function when(ms) {
+  if (!ms) return "";
+  const d = new Date(ms), o = { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" };
+  if (d.getFullYear() !== new Date().getFullYear()) o.year = "numeric";
+  return new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", o).format(d);
+}
+const WHAT_HE = { "Note": "הערה", "No answer": "לא ענה/תה" };
+function whatText(w) {
+  if (S.lang !== "he" || !w) return w || "";
+  if (WHAT_HE[w]) return WHAT_HE[w];
+  const m = /^Status → (.+?)( \((.+)\))?$/.exec(w);
+  return m ? "סטטוס ← " + ((STM[m[1]] && STM[m[1]].he) || m[1]) + (m[3] ? " (" + m[3] + ")" : "") : w;
+}
+function stampText(l) { return l.changedBy ? "✎ " + l.changedBy + " · " + when(l.changedAt) + (l.changedWhat ? " · " + whatText(l.changedWhat) : "") : ""; }
+function lockOf(id) {
+  const k = S.locks.get(id);
+  if (!k || new Date(k.expires).getTime() <= Date.now()) return null;
+  if (S.me && k.by_email === S.me.email) return null;
+  return k;
+}
+async function claim(id) {
+  const { data, error } = await sb.rpc("claim_lead", { p_id: id });
+  if (error) return { ok: true }; // never block work on a lock error: the server still checks on every press
+  return data || { ok: true };
+}
+function release(id) { if (id) sb.rpc("release_lead", { p_id: id }).then(() => {}, () => {}); }
 
 /* ---------- ranking (unchanged) ---------- */
 function facts(l) {
@@ -102,11 +131,13 @@ function rows() {
 }
 function rowHtml(l) {
   const f = l._f, s = f.old ? { c: "na" } : (STM[l.status] || { c: "future" }), e = tel(l.phone), w = why(l, f);
-  const line = f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
-  return '<div class="row' + (f.top && w ? " hot" : "") + (f.done ? " done" : "") + '" data-id="' + esc(l.id) + '">' +
+  const k = lockOf(l.id);
+  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
+  const st = stampText(l);
+  return '<div class="row' + (f.top && w && !k ? " hot" : "") + (f.done ? " done" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
     '<button type="button" class="open" data-act="open"><span class="av st-' + s.c + '">' + esc((l.name || "?").trim().charAt(0).toUpperCase()) + '</span>' +
-    '<span class="txt"><b>' + esc(l.name) + '</b><small>' + esc(line) + '</small></span></button>' +
-    (e ? '<a class="ring" data-act="call" href="tel:' + esc(e) + '" aria-label="' + L("להתקשר", "Call") + '">' + PHONE + '</a>' : '<span class="ring off" aria-hidden="true">' + PHONE + '</span>') + '</div>';
+    '<span class="txt"><b>' + esc(l.name) + '</b><small>' + esc(line) + '</small>' + (st ? '<small class="stamp">' + esc(st) + '</small>' : "") + '</span></button>' +
+    (e && !k ? '<a class="ring" data-act="call" href="tel:' + esc(e) + '" aria-label="' + L("להתקשר", "Call") + '">' + PHONE + '</a>' : '<span class="ring off" aria-hidden="true">' + PHONE + '</span>') + '</div>';
 }
 function render() {
   $("app").dir = S.lang === "he" ? "rtl" : "ltr";
@@ -137,8 +168,15 @@ function render() {
   });
   if (render.h !== html) { list.innerHTML = html; render.h = html; }
 }
-function openLead(id) {
-  const l = S.leads.get(id); if (!l) return; S.open = id;
+async function openLead(id) {
+  const l = S.leads.get(id); if (!l) return;
+  const k = lockOf(id);
+  if (k) { toast(k.by_name + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now"), true); return; }
+  const c = await claim(id);
+  if (!c.ok) { toast((c.by || "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now"), true); return; }
+  S.open = id; S.hist = [];
+  clearInterval(S.hb); S.hb = setInterval(() => { if (S.open) claim(S.open); }, 60000);
+  loadHist(id);
   const f = facts(l), e = tel(l.phone), w = why(l, f);
   const btns = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed", "Won", "Future", "Lost"].map((k) =>
     '<button type="button" class="big st-' + STM[k].c + (l.status === k ? " cur" : "") + '" data-st="' + k + '">' + esc(word(k)) + '</button>').join("");
@@ -149,16 +187,34 @@ function openLead(id) {
     (w ? '<div class="flag">' + esc(w) + '</div>' : "") +
     (e ? '<a class="giant" href="tel:' + esc(e) + '">' + PHONE + '<span>' + L("להתקשר", "Call") + '<small>' + esc(telShow(e)) + '</small></span></a>' : '<div class="giant off">' + L("אין מספר טלפון", "No phone number") + '</div>') +
     (e ? '<div class="two"><a class="soft" target="_blank" rel="noopener" href="https://wa.me/' + esc(e.slice(1)) + '">WhatsApp</a><button type="button" class="soft" data-act="copy" data-v="' + esc(telShow(e)) + '">' + L("העתקת מספר", "Copy number") + '</button></div>' : "") +
-    (l.last && l.last.t ? '<div class="lastn">' + esc(l.last.t) + '<small>' + esc(l.last.by || "") + ' ' + ago(l.last.at) + '</small></div>' : "") +
+    (l.changedBy ? '<div class="stampbig">' + esc(stampText(l)) + '</div>' : "") +
+    (l.last && l.last.t ? '<div class="lastn">' + esc(l.last.t) + '<small>' + esc(l.last.by || "") + ' · ' + esc(when(l.last.at)) + '</small></div>' : "") +
     '<textarea id="noteBox" dir="auto" placeholder="' + L("לכתוב הערה (לא חובה)", "Write a note (optional)") + '"></textarea>' +
     '<div class="q">' + L("מה קרה?", "What happened?") + '</div>' +
     '<div class="two" id="answers"><button type="button" class="big wide st-na" data-na="1">' + L("לא ענה/תה", "No answer") + '</button>' + btns + '</div>' +
     '<div id="lostWhy" hidden><div class="q">Lost reason</div><div class="two" style="margin-top:10px">' + LOST.map((r) => '<button type="button" class="soft" data-lost="' + r[0] + '">' + r[0] + '</button>').join('') + '</div></div>' +
     '<button type="button" class="dark" data-act="noteonly">' + L("לשמור רק את ההערה", "Save the note only") + '</button>' +
+    '<div class="q">' + L("היסטוריה", "History") + '</div><div id="hist" class="hist"></div>' +
     '<a class="mon" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(l.id) + '">' + L("פתיחה ב-monday", "Open in monday") + '</a>';
   $("lead").hidden = false; $("lead").scrollTop = 0; $("home").hidden = true;
+  renderHist();
 }
-function closeLead() { S.open = null; $("lead").hidden = true; $("home").hidden = !S.user; draw(); }
+function closeLead() {
+  const id = S.open; S.open = null; clearInterval(S.hb); release(id);
+  $("lead").hidden = true; $("home").hidden = !S.user; draw();
+}
+async function loadHist(id) {
+  const { data } = await sb.from("lead_updates").select("*").eq("lead_id", id).order("at", { ascending: false }).limit(40);
+  if (S.open !== id) return;
+  S.hist = data || []; renderHist();
+}
+function renderHist() {
+  const el = $("hist"); if (!el) return;
+  if (!S.hist.length) { el.innerHTML = '<div class="hi muted">' + L("אין עדיין היסטוריה.", "No history yet.") + '</div>'; return; }
+  el.innerHTML = S.hist.map((h) => '<div class="hi' + (h.bot ? " bot" : "") + '"><div class="ht">' +
+    (h.kind === "status" ? '<b>' + L("סטטוס: ", "Status: ") + esc(h.text) + '</b>' : esc(h.text)) +
+    '</div><small>' + esc(h.by || "") + ' · ' + esc(when(+h.at)) + (h.source === "app" ? L(" · מהכלי", " · from this app") : L(" · ב-monday", " · in monday")) + '</small></div>').join("");
+}
 
 /* ---------- server calls ---------- */
 async function fn(name, body) {
@@ -170,7 +226,7 @@ async function fn(name, body) {
     body: JSON.stringify(body || {}),
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.ok === false) throw { code: j.code || j.error || "error", message: j.message || "" };
+  if (!r.ok || j.ok === false) throw { code: j.code || j.error || "error", message: j.message || "", by: j.by || "" };
   return j;
 }
 
@@ -185,7 +241,7 @@ async function finish(label, noAnswer, reason) {
     patch(id, fromRow(Object.assign(toRow(l), j.fields || {})));
     toast(label ? L("נשמר: ", "Saved: ") + word(label) : L("נשמר", "Saved"));
     closeLead();
-  } catch (e) { toast(errText(e), true); bs.forEach((b) => { b.disabled = false; }); }
+  } catch (e) { toast(e && e.code === "locked" ? (e.by || "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now") : errText(e), true); bs.forEach((b) => { b.disabled = false; }); }
 }
 function toRow(l) {
   return { id: l.id, name: l.name, status: l.status, phone: l.phone, email: l.email, source: l.source, interest: l.interest, about: l.about,
@@ -209,6 +265,7 @@ async function sync(manual) {
 /* ---------- events ---------- */
 $("list").addEventListener("click", (ev) => {
   const row = ev.target.closest(".row"), t = ev.target.closest("[data-act]"); if (!row || !t) return;
+  if (row.classList.contains("locked")) { const k = lockOf(row.dataset.id); toast((k ? k.by_name : "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now"), true); return; }
   if (t.dataset.act === "call") { const id = row.dataset.id; setTimeout(() => openLead(id), 400); return; }
   openLead(row.dataset.id);
 });
@@ -283,6 +340,10 @@ async function loadAll() {
   const m = new Map(); (data || []).forEach((r) => m.set(r.id, fromRow(r)));
   S.leads = m; S.dbReady = true; draw();
 }
+async function loadLocks() {
+  const { data } = await sb.from("lead_locks").select("*");
+  S.locks = new Map((data || []).map((k) => [k.lead_id, k])); draw();
+}
 async function loadMeta() {
   const { data } = await sb.from("sync_meta").select("at").eq("id", 1).maybeSingle();
   S.metaAt = (data && +data.at) || 0; setSync();
@@ -293,14 +354,24 @@ async function start(user) {
   const { data: me } = await sb.from("team").select("name,email").eq("email", (user.email || "").toLowerCase()).maybeSingle();
   S.me = me || null;
   if (!me) { S.dbReady = true; banner(L("המייל הזה לא ברשימת הצוות.", "This email isn't on the team list."), ""); render(); return; }
-  await Promise.all([loadAll(), loadMeta()]);
+  await Promise.all([loadAll(), loadMeta(), loadLocks()]);
   sb.channel("leads-live")
     .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, (p) => {
       if (p.eventType === "DELETE") { S.leads.delete(p.old.id); } else if (p.new) { S.leads.set(p.new.id, fromRow(p.new)); }
       draw();
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sync_meta" }, (p) => { S.metaAt = +p.new.at || 0; setSync(); })
-    .subscribe((st) => { if (st === "SUBSCRIBED") loadAll(); });
+    .on("postgres_changes", { event: "*", schema: "public", table: "lead_locks" }, (p) => {
+      if (p.eventType === "DELETE") S.locks.delete(p.old.lead_id); else if (p.new) S.locks.set(p.new.lead_id, p.new);
+      draw();
+    })
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "lead_updates" }, (p) => {
+      if (p.new && p.new.lead_id === S.open && !S.hist.some((h) => h.id === p.new.id)) {
+        S.hist.unshift(p.new); S.hist.sort((a, b) => b.at - a.at); renderHist();
+      }
+    })
+    .subscribe((st) => { if (st === "SUBSCRIBED") { loadAll(); loadLocks(); } });
+  setInterval(draw, 30000); // expired locks turn back to normal
   setTimeout(() => sync(false), 1200);
   setInterval(() => {
     if (document.hidden) return;

@@ -24,6 +24,12 @@ Deno.serve(async (req) => {
   const { data: l } = await db.from("leads").select("*").eq("id", id).maybeSingle();
   if (!l) return json({ error: "not_found" }, 404);
 
+  // one person on a lead at a time
+  const { data: lock } = await db.from("lead_locks").select("by_email,by_name,expires").eq("lead_id", id).maybeSingle();
+  if (lock && lock.by_email !== me.email && new Date(lock.expires).getTime() > Date.now()) {
+    return json({ ok: false, code: "locked", by: lock.by_name }, 409);
+  }
+
   if (noAnswer) text = "No answer" + (text ? "\n" + text : "");
   if (!label && !text) return json({ error: "note_required" }, 400);
 
@@ -44,9 +50,19 @@ Deno.serve(async (req) => {
       fields.status = label;
     }
     if (label) fields.st_at = Date.now();
-    fields.touch = Date.now();
+    const now = Date.now();
+    fields.touch = now;
+    // the stamp: who, when, what
+    fields.changed_by = me.name;
+    fields.changed_at = now;
+    fields.changed_what = label && label !== l.status ? "Status → " + label + (reason ? " (" + reason + ")" : "") : noAnswer ? "No answer" : "Note";
     await db.from("leads").update(fields).eq("id", id);
-    await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind, status_from: l.status, status_to: label, lost_reason: reason, note: text || null, monday_update_id: updateId });
+    const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind, status_from: l.status, status_to: label, lost_reason: reason, note: text || null, monday_update_id: updateId }).select("id").single();
+    // history rows, so the lead screen shows them at once (the sync keeps these, not monday's copies)
+    const rows: any[] = [];
+    if (text && updateId) rows.push({ id: updateId, lead_id: id, kind: "note", text, by: me.name, at: now, source: "app" });
+    if (label && label !== l.status) rows.push({ id: "app-" + (act?.id || now), lead_id: id, kind: "status", text: (l.status || "—") + " → " + label + (reason ? " (" + reason + ")" : ""), by: me.name, at: now, source: "app" });
+    if (rows.length) await db.from("lead_updates").upsert(rows);
     return json({ ok: true, fields });
   } catch (e) {
     const code = e instanceof MondayError ? e.code : "error";

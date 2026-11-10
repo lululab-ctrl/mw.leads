@@ -94,3 +94,15 @@ button{cursor:pointer}
 #signin .msg.bad{color:var(--hot)}
 .who{font-size:13px;color:var(--muted);text-align:center;margin-top:24px}
 .who button{border:none;background:none;color:var(--c-new);font-weight:700;padding:4px}
+
+/* who changed it and when; leads someone else has open (new) */
+.txt small.stamp{font-size:13px;color:var(--muted);font-weight:400}
+.row.locked .open,.row.locked .ring{opacity:.45;filter:grayscale(1)}
+.row.locked .txt small{color:var(--fg);font-weight:700}
+.stampbig{font-size:15px;color:var(--muted)}
+.hist{display:flex;flex-direction:column;gap:8px}
+.hi{background:var(--card);border-radius:14px;padding:10px 12px;font-size:15px;overflow-wrap:anywhere}
+.hi .ht{white-space:pre-wrap;unicode-bidi:plaintext;text-align:start}
+.hi small{display:block;color:var(--muted);font-size:13px;margin-top:4px}
+.hi.bot{opacity:.7}
+.hi.muted{color:var(--muted)}

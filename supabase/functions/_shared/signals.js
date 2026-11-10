@@ -79,7 +79,7 @@ export function merge(d, prev, s) {
   return d;
 }
 
-const KEYS = ["name", "status", "phone", "email", "source", "interest", "about", "lang", "fu_date", "created", "ecb", "mcb", "na", "ret", "last_at", "last_t"];
+const KEYS = ["name", "status", "phone", "email", "source", "interest", "about", "lang", "fu_date", "created", "ecb", "mcb", "na", "ret", "last_at", "last_t", "changed_by", "changed_at", "changed_what"];
 export function differs(a, b) {
   for (const k of KEYS) if ((a[k] || "") !== (b[k] || "")) return true;
   return false;
@@ -89,4 +89,37 @@ export function differs(a, b) {
 export function noteHtml(text, by) {
   const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   return "<p>" + esc(text).replace(/\n/g, "<br>") + "<br>— " + esc(by) + "</p>";
+}
+
+// monday update → a history row
+export function historyRow(u) {
+  const t = String(u.text_body || "").trim();
+  const bot = String((u.creator && u.creator.id) || "") === BOT;
+  return {
+    id: String(u.id), lead_id: String(u.item_id || ""), kind: "note", text: t.slice(0, 4000),
+    by: bot ? "Flow Admin" : noteBy(t, u.creator && u.creator.name), at: Date.parse(u.created_at) || 0, source: "monday", bot,
+  };
+}
+
+// monday activity log entry for the Status column → { lead_id, at, from, to, user_id } or null
+export function statusLog(a) {
+  let d = a.data;
+  try { if (typeof d === "string") d = JSON.parse(d); } catch (_) { return null; }
+  if (!d || String(d.column_id || "") !== C.status) return null;
+  const lab = (v) => (v && v.label && (v.label.text || v.label)) || "";
+  const at = Math.round(Number(a.created_at) / 10000); // monday gives 1/10,000,000 s
+  if (!d.pulse_id || !at) return null;
+  return { lead_id: String(d.pulse_id), at, from: String(lab(d.previous_value) || ""), to: String(lab(d.value) || ""), user_id: String(a.user_id || "") };
+}
+
+// the newest change by a person (team note, or a status change made in monday) → the lead's stamp.
+// Changes made from this app are stamped by the app itself and are never older-than-newest here.
+export function stamp(prev, s, logs) {
+  prev = prev || {};
+  let best = { changed_by: prev.changed_by || "", changed_at: Number(prev.changed_at || 0), changed_what: prev.changed_what || "" };
+  const cands = [];
+  if (s && s.last) cands.push({ by: s.last.by, at: s.last.at, what: NA_RE.test(s.last.t) ? "No answer" : "Note" });
+  for (const l of logs || []) if (l.to) cands.push({ by: l.by, at: l.at, what: "Status → " + l.to });
+  for (const c of cands) if (c.by && c.at > best.changed_at + 5000) best = { changed_by: c.by, changed_at: c.at, changed_what: c.what };
+  return best;
 }

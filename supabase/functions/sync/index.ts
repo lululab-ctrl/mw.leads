@@ -2,7 +2,7 @@
 // Matan's page. Called every minute by pg_cron (x-cron-secret) and by the page's Refresh
 // button / auto-refresh (a signed-in team member).
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
-import { BOARD, C, SKIP_GROUPS, differs, fromItem, merge, signals } from "../_shared/signals.js";
+import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, merge, signals, stamp, statusLog } from "../_shared/signals.js";
 
 const COLS = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate];
 const ITEM_FIELDS = `id name created_at group { id } column_values(ids: ${JSON.stringify(COLS)}) { id text }`;
@@ -69,6 +69,42 @@ Deno.serve(async (req) => {
     }
     const sig = signals(ups);
 
+    // 2b. status changes made in monday, with who made them (monday's activity log)
+    const logsByLead: Record<string, any[]> = {};
+    const statusRows: any[] = [];
+    try {
+      const days = meta?.full_done ? 2 : 30;
+      const fromIso = new Date(Date.now() - days * 864e5).toISOString();
+      const a = await monday(
+        `query ($f: ISO8601DateTime!) { boards(ids: [${BOARD}]) { activity_logs(from: $f, column_ids: ["${C.status}"], limit: 500) { id event data user_id created_at } } }`,
+        { f: fromIso },
+      );
+      const logs = (a?.boards?.[0]?.activity_logs || []).map(statusLog).filter(Boolean);
+      const ids = [...new Set(logs.map((l: any) => l.user_id).filter(Boolean))];
+      const names: Record<string, string> = {};
+      if (ids.length) {
+        const u = await monday(`query ($i: [ID!]) { users(ids: $i) { id name } }`, { i: ids });
+        for (const x of u?.users || []) names[String(x.id)] = String(x.name || "");
+      }
+      // a status change this app made shows in monday under the token's account: keep the app's row instead
+      const { data: appSt } = await db.from("lead_updates").select("lead_id,text,at").eq("source", "app").eq("kind", "status").gte("at", Date.now() - days * 864e5);
+      for (const l of logs as any[]) {
+        const dup = (appSt || []).some((r: any) => r.lead_id === l.lead_id && Math.abs(Number(r.at) - l.at) < 120000 && String(r.text).includes("→ " + l.to));
+        if (dup) continue;
+        l.by = names[l.user_id] || "monday";
+        (logsByLead[l.lead_id] ||= []).push(l);
+        statusRows.push({ id: "st-" + l.lead_id + "-" + l.at, lead_id: l.lead_id, kind: "status", text: (l.from || "—") + " → " + l.to, by: l.by, at: l.at, source: "monday", bot: false });
+      }
+    } catch (e) {
+      if (e instanceof MondayError && e.code !== "tool_error") throw e;
+      console.log("activity log skipped", String((e as Error).message));
+    }
+
+    // 2c. history: every monday note and status change, kept for the lead screen
+    const hist = ups.map(historyRow).filter((r: any) => r.lead_id && r.text);
+    for (let i = 0; i < hist.length; i += 300) await db.from("lead_updates").upsert(hist.slice(i, i + 300), { ignoreDuplicates: true });
+    for (let i = 0; i < statusRows.length; i += 300) await db.from("lead_updates").upsert(statusRows.slice(i, i + 300), { ignoreDuplicates: true });
+
     // 3. merge with what we have; leave alone anything changed from the page in the last 30 s
     const { data: have } = await db.from("leads").select("*");
     const prevById = new Map((have || []).map((r: any) => [r.id, r]));
@@ -81,6 +117,7 @@ Deno.serve(async (req) => {
       const prev: any = prevById.get(row.id);
       if (prev && Number(prev.touch || 0) > started - 30000) continue;
       merge(row, prev, sig[row.id]);
+      Object.assign(row, stamp(prev, sig[row.id], logsByLead[row.id]));
       if (!prev || differs(prev, row)) upserts.push({ ...row, synced_at: new Date().toISOString() });
     }
     for (let i = 0; i < upserts.length; i += 200) {

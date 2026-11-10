@@ -5,7 +5,7 @@
   const now = Date.now(), D = 864e5, H = 36e5;
   const day = new Date(); day.setHours(0, 0, 0, 0);
   const rows = [
-    { id: "1", name: "Dana Levi", status: "New Lead", phone: "050-1234567", interest: "Snow leopards", created: now - 2 * D, ecb: now - H },
+    { id: "1", name: "Dana Levi", status: "New Lead", phone: "050-1234567", interest: "Snow leopards", created: now - 2 * D, ecb: now - H, changed_by: "Eliran", changed_at: now - 2 * H, changed_what: "Status → In conversation" },
     { id: "2", name: "רון כהן", status: "In conversation", phone: "0529998877", interest: "Kerkini", created: now - 20 * D, mcb: now - 2 * D, last_t: "Spoke, call later", last_at: now - 3 * D, last_by: "Eliran" },
     { id: "3", name: "Tom Old", status: "New Lead", phone: "", interest: "Iceland", created: now - 30 * D },
     { id: "4", name: "Maya Done", status: "Qualified", phone: "+447700900123", created: now - 5 * D, last_t: "Sent the PDF", last_at: day.getTime() + 60000, last_by: "Jeinna" },
@@ -21,9 +21,14 @@
       if (table === "leads") return { data: rows.slice(), error: null };
       if (table === "sync_meta") return { data: { at: now - 20000 }, error: null };
       if (table === "team") return { data: { name: "Jeinna", email: "tester@example.com" }, error: null };
+      if (table === "lead_locks") return { data: [{ lead_id: "7", by_email: "emilia@example.com", by_name: "Emilia", at: new Date().toISOString(), expires: new Date(Date.now() + 6e5).toISOString() }], error: null };
+      if (table === "lead_updates") return { data: [
+        { id: "u2", lead_id: "1", kind: "status", text: "New Lead → In conversation", by: "Eliran", at: now - 2 * H, source: "monday", bot: false },
+        { id: "u1", lead_id: "1", kind: "note", text: "הליד לחץ על הכפתור", by: "Flow Admin", at: now - 3 * H, source: "monday", bot: true }], error: null };
       return { data: null, error: null };
     };
-    const api = { select() { return api; }, limit() { return Promise.resolve(res()); }, eq() { return api; }, maybeSingle() { return Promise.resolve(res()); } };
+    const api = { select() { return api; }, limit() { return Promise.resolve(res()); }, eq() { return api; }, order() { return api; }, maybeSingle() { return Promise.resolve(res()); },
+      then(ok, bad) { return Promise.resolve(res()).then(ok, bad); } };
     return api;
   };
   window.MWPL_CONFIG = { supabaseUrl: "https://mock.supabase.co", supabaseAnonKey: "anon" };
@@ -33,6 +38,7 @@
       onAuthStateChange() {}, signOut: async () => {}, signInWithOtp: async () => ({ error: null }),
     },
     from: q,
+    rpc: async (name, args) => { window.__calls.push({ name, body: args }); return { data: { ok: true }, error: null }; },
     channel() { const c = { on() { return c; }, subscribe(cb) { cb && cb("SUBSCRIBED"); return c; } }; return c; },
   };
   const realFetch = window.fetch;

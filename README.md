@@ -34,6 +34,12 @@ Won and Lost never show; Future sits behind "Call later (n)".
 **Buttons.** No answer (posts "No answer", count +1), the 8 statuses, Lost → reason (Price, Dates, Not a fit, No response, Other),
 Save the note only. Every note posted to monday ends with "— Name" (one monday token posts them all), and every press is logged in `lead_actions`.
 
+**Stamps, locks and history (added 10 Nov 2026).**
+- Every lead shows who last changed it and when ("✎ Emilia · 10 Nov, 14:32 · Status → Offer sent"), whether the change was made here or in monday (team notes, and Status changes from monday's activity log).
+- Opening a lead locks it: everyone else sees it grayed out with "🔒 Name is working on this lead" and can't open it or press its buttons (the `act` function refuses too). The lock is renewed every minute and freed on Back or after a press; a tab left open frees it after 10 minutes (long enough for a phone call).
+- The lead screen has a History list: every monday note and status change and everything done here, with name, date and time (`lead_updates`).
+- Both directions: presses here go to monday at once; changes in monday reach here within a minute.
+
 Known quirks kept from the original: the follow-up date is read but not used ("Follow up today" never shows); the Lost reasons are English on the Hebrew screen.
 
 ## Setup
