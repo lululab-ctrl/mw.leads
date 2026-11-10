@@ -222,7 +222,7 @@ function renderLead(id, fresh) {
   const btns = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed", "Won", "Future", "Lost"].map((k) =>
     '<button type="button" class="big st-' + STM[k].c + (l.status === k ? " cur" : "") + '" data-st="' + k + '">' + esc(word(k)) + '</button>').join("");
   $("leadBody").innerHTML =
-    '<div class="leadbar"><button type="button" class="back" data-act="back" aria-label="' + L("סגירת הליד", "Close the lead") + '">✕ ' + L("סגירה", "Close") + '</button><span class="lb-name">' + esc(l.name) + '</span></div>' +
+    '<button type="button" class="back" data-act="back" aria-label="' + L("סגירת הליד", "Close the lead") + '">✕ ' + L("סגירה", "Close") + '</button>' +
     '<h2 class="name">' + esc(l.name) + '</h2>' +
     (l.interest ? '<div class="about">' + esc(l.interest) + '</div>' : "") +
     (w ? '<div class="flag">' + esc(w) + '</div>' : "") +
@@ -679,6 +679,16 @@ $("leadBody").addEventListener("click", (ev) => {
     (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => toast(L("המספר הועתק", "Number copied"))).catch(() => toast(v));
   }
 });
+// Close floats at the top: it slides away while you scroll down and comes back when you scroll up
+(function () {
+  let lastY = 0;
+  $("lead").addEventListener("scroll", () => {
+    const y = $("lead").scrollTop, b = document.querySelector("#lead .back"); if (!b) return;
+    if (y < 40 || y < lastY - 6) b.classList.remove("tuck");
+    else if (y > lastY + 6) b.classList.add("tuck");
+    lastY = y;
+  }, { passive: true });
+})();
 $("leadBody").addEventListener("input", (ev) => {
   if (ev.target.id !== "noteBox" || !S.open) return;
   try { const v = ev.target.value; if (v.trim()) localStorage.setItem("mwpl.draft." + S.open, v); else localStorage.removeItem("mwpl.draft." + S.open); } catch (_) {}

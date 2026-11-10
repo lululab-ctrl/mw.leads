@@ -111,10 +111,10 @@ button{cursor:pointer}
 [hidden]{display:none!important}
 
 /* Back stays at the top while the lead screen scrolls */
-/* a solid top bar on the lead: Close and the lead's name; nothing hides under a floating button */
-.leadbar{position:sticky;top:calc(-10px - env(safe-area-inset-top,0px));z-index:3;background:var(--bg);display:flex;align-items:center;gap:12px;padding:10px 0 8px;margin-top:-10px;border-bottom:1px solid var(--line)}
-.leadbar .back{flex:none}
-.lb-name{font-weight:700;font-size:16px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;unicode-bidi:plaintext}
+/* Close floats at the top while the lead scrolls: small, solid, so it covers as little as possible */
+#lead .back{position:sticky;top:8px;z-index:3;min-height:38px;padding:0 14px;font-size:15px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg);box-shadow:0 2px 10px rgba(50,51,56,.18);margin-bottom:-4px}
+#lead .back{transition:transform .2s ease,opacity .2s ease}
+#lead .back.tuck{transform:translateY(-70px);opacity:0;pointer-events:none}
 
 /* Sign in with Google */
 #signin .giant.google{background:#fff;color:var(--fg);border:2px solid var(--line);font-size:21px;width:100%}
