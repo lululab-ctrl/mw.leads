@@ -40,7 +40,7 @@ Known quirks kept from the original: the follow-up date is read but not used ("F
 
 1. GitHub: Settings → Pages → Source: **GitHub Actions**.
 2. Settings → Secrets and variables → Actions:
-   - Variables: `SUPABASE_PROJECT_REF`, `SUPABASE_URL` (`https://<ref>.supabase.co`), `SUPABASE_ANON_KEY`, `SITE_URL` (the Pages address), `SITE_ORIGIN` (the same, without a path)
+   - Variables: none needed. The MWP Leads project's address and public key are in `web/config.js`; the site is https://lululab-ctrl.github.io/mw.leads/
    - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `CRON_SECRET` (long random text), `TEAM` (one per line: `email,Name`), `MONDAY_API_TOKEN` (later)
 3. Push to `main` (or run the Deploy workflow). Until `MONDAY_API_TOKEN` is set the list stays empty and the page says the monday connection isn't set up.
 4. Supabase → Authentication → Emails: set a custom SMTP server (the built-in sender allows only a few emails an hour).
