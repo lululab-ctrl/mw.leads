@@ -18,7 +18,8 @@ const ST = [
 const STM = {}; ST.forEach((s) => { STM[s.k] = s; });
 const LOST = [["Price", "מחיר"], ["Dates", "תאריכים"], ["Not a fit", "לא מתאים"], ["No response", "אין מענה"], ["Other", "אחר"]];
 const OPEN = ["New Lead", "In conversation", "Qualified", "Offer sent", "Committed"];
-const S = { lang: "en", leads: new Map(), locks: new Map(), hist: [], hb: 0, q: "", open: null, user: null, me: null, syncing: false, syncAt: 0, metaAt: 0, dbReady: false, err: null, later: false };
+const S = { tab: 0, lang: "en", leads: new Map(), locks: new Map(), hist: [], hb: 0, q: "", open: null, user: null, me: null, syncing: false, syncAt: 0, metaAt: 0, dbReady: false, err: null, later: false };
+try { const t = +localStorage.getItem("mwpl.tab"); if (t >= 0 && t <= 4) S.tab = t; } catch (_) {}
 try { const sl = localStorage.getItem("mwpl.lang"); S.lang = sl || ((navigator.language || "").slice(0, 2) === "he" ? "he" : "en"); } catch (_) {}
 function L(he, en) { return S.lang === "he" ? he : en; }
 function $(id) { return document.getElementById(id); }
@@ -123,8 +124,8 @@ function rows() {
   const q = S.q.trim().toLowerCase(), out = [];
   S.leads.forEach((l) => {
     if (l.status === "Won" || l.status === "Lost") return;
-    const show = q ? (l.name + " " + (l.phone || "") + " " + (l.interest || "")).toLowerCase().indexOf(q) >= 0 : (S.later ? l.status === "Future" : l.status !== "Future");
-    if (show) { l._f = facts(l); out.push(l); }
+    const show = q ? (l.name + " " + (l.phone || "") + " " + (l.interest || "")).toLowerCase().indexOf(q) >= 0 : true;
+    if (show) { l._f = facts(l); l._t = l.status === "Future" ? 4 : l._f.g; out.push(l); }
   });
   out.sort((a, b) => a._f.g - b._f.g || b._f.score - a._f.score || (b.created || 0) - (a.created || 0));
   return out;
@@ -150,22 +151,35 @@ function render() {
   renderSignin();
   // an open lead stays open even if it leaves the list (e.g. Won / Lost); it closes on Back
   if (!S.dbReady && !S.leads.size) return;
-  const r = rows(), list = $("list"); let nLater = 0;
-  S.leads.forEach((l) => { if (l.status === "Future") nLater++; });
-  const lb = $("later"); lb.hidden = !nLater || !!S.q.trim();
-  lb.textContent = S.later ? L("חזרה לרשימה", "Back to the list") : L("לחזור אליהם אחר כך", "Call later") + " (" + nLater + ")";
-  if (!r.length) {
+  const r = rows(), list = $("list"), searching = !!S.q.trim();
+  $("later").hidden = true; // Call later is a tab now
+  // tabs: one per section, plus Call later (Future); search looks through all of them
+  const cnt = [0, 0, 0, 0, 0];
+  if (!searching) r.forEach((l) => { cnt[l._t]++; });
+  const tabs = $("tabs");
+  tabs.hidden = searching || !S.leads.size;
+  if (!searching) {
+    const th = TABS().map((name, i) => '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (S.tab === i ? " on" : "") + '" aria-selected="' + (S.tab === i) + '" data-tab="' + i + '">' + esc(name) + ' <span>' + cnt[i] + '</span></button>').join("");
+    if (tabs.innerHTML !== th) tabs.innerHTML = th;
+  }
+  const shown = searching ? r : r.filter((l) => l._t === S.tab);
+  if (!shown.length) {
     list.innerHTML = '<div class="empty">' + (S.leads.size ? L("אין כאן אף אחד.", "Nobody here.") : (S.syncing ? L("מביאים את הלידים…", "Getting your leads…") : L("אין עדיין לידים. לוחצים על רענון.", "No leads yet. Tap refresh."))) + '</div>';
     render.h = ""; return;
   }
   let html = "", g0 = -1;
-  const names = [L("להתקשר קודם", "Call first"), L("בתהליך", "In progress"), L("ישנים, עוד לא חזרנו אליהם", "Old, never called"), L("טופלו היום", "Done today")], cnt = [0, 0, 0, 0];
-  r.forEach((l) => { cnt[l._f.g]++; });
-  r.forEach((l) => {
-    const g = l._f.g;
-    if (g !== g0) { html += '<div class="sec' + (g === 0 ? " hot" : "") + '">' + names[g] + ' <span>' + cnt[g] + '</span></div>'; g0 = g; }
-    html += rowHtml(l);
-  });
+  if (searching) {
+    // search results keep their section headings, so you see where each lead is
+    const names = TABS(), sc = [0, 0, 0, 0, 0];
+    shown.sort((a, b) => a._t - b._t);
+    shown.forEach((l) => { sc[l._t]++; });
+    shown.forEach((l) => {
+      if (l._t !== g0) { html += '<div class="sec' + (l._t === 0 ? " hot" : "") + '">' + names[l._t] + ' <span>' + sc[l._t] + '</span></div>'; g0 = l._t; }
+      html += rowHtml(l);
+    });
+  } else {
+    shown.forEach((l) => { html += rowHtml(l); });
+  }
   if (render.h !== html) { list.innerHTML = html; render.h = html; }
 }
 async function openLead(id) {
@@ -216,17 +230,18 @@ function closeLead() {
   const before = S.openSec, after = id ? secOf(id) : null, l = id && S.leads.get(id);
   if (l && before !== after) {
     const name = l.name || "";
-    if (after === null) toast(name + L(" יצא/ה מהרשימה (", " left the list (") + (STM[l.status] ? L(STM[l.status].he, l.status) : l.status) + ")" + (l.status === "Future" ? L(" · נמצא/ת ב״לחזור אליהם אחר כך״", " · it's under Call later") : ""));
+    if (after === null) toast(name + L(" יצא/ה מהרשימה (", " left the list (") + (STM[l.status] ? L(STM[l.status].he, l.status) : l.status) + ")");
     else toast(name + L(" עבר/ה ל״", " moved to \u201c") + secName(after) + L("״", "\u201d"));
   }
 }
 // which list section a lead is in right now (null: not listed, e.g. Won, Lost, Future)
 function secOf(id) {
   const l = S.leads.get(id);
-  if (!l || l.status === "Won" || l.status === "Lost" || (l.status === "Future" && !S.later)) return null;
-  return facts(l).g;
+  if (!l || l.status === "Won" || l.status === "Lost") return null;
+  return l.status === "Future" ? 4 : facts(l).g;
 }
-function secName(g) { return [L("להתקשר קודם", "Call first"), L("בתהליך", "In progress"), L("ישנים, עוד לא חזרנו אליהם", "Old, never called"), L("טופלו היום", "Done today")][g]; }
+function TABS() { return [L("להתקשר קודם", "Call first"), L("בתהליך", "In progress"), L("ישנים, עוד לא חזרנו אליהם", "Old, never called"), L("טופלו היום", "Done today"), L("לחזור אליהם אחר כך", "Call later")]; }
+function secName(g) { return TABS()[g]; }
 async function loadHist(id) {
   const { data } = await sb.from("lead_updates").select("*").eq("lead_id", id).order("at", { ascending: false }).limit(40);
   if (S.open !== id) return;
@@ -308,7 +323,11 @@ $("leadBody").addEventListener("click", (ev) => {
   }
 });
 $("q").addEventListener("input", function () { S.q = this.value; draw(); });
-$("later").addEventListener("click", () => { S.later = !S.later; render(); window.scrollTo(0, 0); });
+$("tabs").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-tab]"); if (!b) return;
+  S.tab = +b.dataset.tab; try { localStorage.setItem("mwpl.tab", String(S.tab)); } catch (_) {}
+  render(); window.scrollTo(0, 0);
+});
 $("refresh").addEventListener("click", () => sync(true));
 $("lang").addEventListener("click", () => {
   S.lang = S.lang === "he" ? "en" : "he";

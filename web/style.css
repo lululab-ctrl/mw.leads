@@ -127,3 +127,12 @@ button{cursor:pointer}
 .pwbox .msg.bad{color:var(--hot)}
 #signin input + input{margin-top:0}
 .row.flash .open{outline:3px solid var(--c-new);outline-offset:2px}
+
+/* sections as tabs (tap to switch instead of scrolling) */
+.tabs{position:sticky;top:0;z-index:2;display:flex;gap:8px;overflow-x:auto;padding:10px 0;margin:6px 0 4px;background:var(--bg);scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;min-height:44px;border-radius:999px;border:2px solid var(--line);background:var(--bg);padding:0 14px;font-weight:700;font-size:15px;white-space:nowrap;color:var(--fg)}
+.tab span{font-weight:500;color:var(--muted);margin-inline-start:4px}
+.tab.hot{color:var(--hot)}
+.tab.on{background:var(--ink);border-color:var(--ink);color:var(--ink-fg)}
+.tab.on span{color:inherit;opacity:.8}
