@@ -197,3 +197,11 @@ button{cursor:pointer}
 .ffoc{display:flex;flex-direction:column;gap:8px}
 .fbtn{min-height:46px;font-size:15px;justify-content:flex-start;padding:0 14px}
 .fbtn.in{border-color:var(--c-new);color:var(--c-new)}
+/* Focus tabs: before Call first, in their own colour */
+.tab.focus{color:var(--c-new);display:flex;align-items:center}
+.tab.focus i{font-style:normal;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab.focus span{background:#DCEEF7;color:var(--c-new)}
+.tab.focus.on{color:var(--c-new)}
+.tab.focus.on::after{background:var(--c-new)}
+.tab.focus.on span{background:var(--c-new);color:#fff}
+.focushead{position:static;border-bottom:none;padding:0;margin:0 0 8px}

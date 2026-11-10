@@ -155,16 +155,20 @@ function render() {
   const fo = !searching && S.inFocus ? S.focus.find((f) => f.id === S.inFocus) : null;
   if (S.inFocus && !fo && S.focusLoaded) { S.inFocus = null; try { localStorage.removeItem("mwpl.focus"); } catch (_) {} }
   renderFocusBar(searching, fo, r);
-  if (fo) r = r.filter((l) => focusHas(fo, l));
   $("later").hidden = true; // Call later is its own section (and tab) at the end of the list
   // one long list with every section, as before; the tabs are shortcuts that jump to a section
-  const names = TABS(), cnt = [0, 0, 0, 0, 0];
-  r.forEach((l) => { cnt[l._t]++; });
-  $("tabwrap").hidden = searching || !!fo || !S.leads.size;
+  const names = TABS(), all = [0, 0, 0, 0, 0];
+  r.forEach((l) => { all[l._t]++; });
+  $("tabwrap").hidden = searching || !S.leads.size;
   if (!searching) {
-    const th = ORDER.map((i) => [names[i], i]).map(([name, i]) => '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (S.tab === i ? " on" : "") + '" aria-selected="' + (S.tab === i) + '" data-tab="' + i + '">' + esc(name) + ' <span>' + cnt[i] + '</span></button>').join("");
+    // your Focus lists come first, in their own colour; then the sections
+    const ft = S.focus.map((f) => '<button type="button" role="tab" class="tab focus' + (fo && fo.id === f.id ? " on" : "") + '" aria-selected="' + !!(fo && fo.id === f.id) + '" data-focus="' + esc(f.id) + '" title="' + esc(f.name) + '"><i>★ ' + esc(f.name) + '</i> <span>' + focusCount(f, r) + '</span></button>').join("");
+    const th = ft + ORDER.map((i) => [names[i], i]).map(([name, i]) => { const on = !fo && S.tab === i; return '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (on ? " on" : "") + '" aria-selected="' + on + '" data-tab="' + i + '">' + esc(name) + ' <span>' + all[i] + '</span></button>'; }).join("");
     if ($("tabs").innerHTML !== th) { $("tabs").innerHTML = th; tabArrows(); }
   }
+  if (fo) r = r.filter((l) => focusHas(fo, l));
+  const cnt = [0, 0, 0, 0, 0];
+  r.forEach((l) => { cnt[l._t]++; });
   if (!r.length) {
     list.innerHTML = '<div class="empty">' + (fo ? L("אין כרגע לידים בפוקוס הזה. אפשר להוסיף ליד מתוך הליד עצמו, או לערוך את הפוקוס.", "No leads in this focus right now. Add one from inside a lead, or edit the focus.") : S.leads.size ? L("אין כאן אף אחד.", "Nobody here.") : (S.syncing ? L("מביאים את הלידים…", "Getting your leads…") : L("אין עדיין לידים. לוחצים על רענון.", "No leads yet. Tap refresh."))) + '</div>';
     render.h = ""; return;
@@ -280,11 +284,10 @@ async function loadFocus() {
 }
 function renderFocusBar(searching, fo, r) {
   const bar = $("focusBar"), head = $("focusHead");
-  bar.hidden = !S.user || !!fo; // stays beside the search bar while you type
+  bar.hidden = !S.user; // "+ Focus" stays beside the search bar
   head.hidden = !fo;
   if (!bar.hidden) {
-    const h = S.focus.map((f) => '<button type="button" class="fchip" data-focus="' + esc(f.id) + '" title="' + esc(f.name) + '"><i>★ ' + esc(f.name) + '</i><span>' + focusCount(f, r) + '</span></button>').join("") +
-      '<button type="button" class="fchip add" data-act="newfocus" aria-label="' + L("פוקוס חדש", "New focus") + '">' + (S.focus.length ? "+" : "+ " + L("פוקוס", "Focus")) + '</button>';
+    const h = '<button type="button" class="fchip add" data-act="newfocus" aria-label="' + L("פוקוס חדש", "New focus") + '">+ ' + L("פוקוס", "Focus") + '</button>';
     if (bar.innerHTML !== h) bar.innerHTML = h;
   }
   if (fo) {
@@ -295,7 +298,11 @@ function renderFocusBar(searching, fo, r) {
     if (head.innerHTML !== h) head.innerHTML = h;
   }
 }
-function enterFocus(id) { S.inFocus = id; try { id ? localStorage.setItem("mwpl.focus", id) : localStorage.removeItem("mwpl.focus"); } catch (_) {} render(); window.scrollTo(0, 0); }
+function enterFocus(id) {
+  S.inFocus = id; try { id ? localStorage.setItem("mwpl.focus", id) : localStorage.removeItem("mwpl.focus"); } catch (_) {}
+  render(); window.scrollTo(0, 0);
+  if (id) { $("tabs").scrollLeft = 0; tabArrows(); } // the Focus tab is first: slide the bar back to it
+}
 $("focusBar").addEventListener("click", (ev) => {
   const c = ev.target.closest("[data-focus]"); if (c) { enterFocus(c.dataset.focus); return; }
   if (ev.target.closest('[data-act="newfocus"]')) focusDialog(null);
@@ -482,7 +489,9 @@ $("leadBody").addEventListener("input", (ev) => {
 });
 $("q").addEventListener("input", function () { S.q = this.value; draw(); });
 $("tabs").addEventListener("click", (ev) => {
+  const fb = ev.target.closest("[data-focus]"); if (fb) { enterFocus(fb.dataset.focus); return; }
   const b = ev.target.closest("[data-tab]"); if (!b) return;
+  if (S.inFocus) { S.tab = -1; enterFocus(null); } // back to the full list, then jump
   const i = +b.dataset.tab, h = $("sec-" + i);
   if (!h) { toast(TABS()[i] + L(": אין כאן אף אחד.", ": nobody here.")); return; }
   setTab(i);
@@ -493,10 +502,10 @@ $("tabs").addEventListener("click", (ev) => {
 function setTab(i) {
   if (S.tab === i) return;
   S.tab = i;
-  document.querySelectorAll("#tabs .tab").forEach((t) => { const on = +t.dataset.tab === i; t.classList.toggle("on", on); t.setAttribute("aria-selected", on); if (on) { const bar = $("tabs"), r = t.getBoundingClientRect(), br = bar.getBoundingClientRect(); if (r.left < br.left || r.right > br.right) { bar.scrollLeft += (r.left + r.width / 2) - (br.left + br.width / 2); tabArrows(); } } });
+  document.querySelectorAll("#tabs .tab[data-tab]").forEach((t) => { const on = +t.dataset.tab === i; t.classList.toggle("on", on); t.setAttribute("aria-selected", on); if (on) { const bar = $("tabs"), r = t.getBoundingClientRect(), br = bar.getBoundingClientRect(); if (r.left < br.left || r.right > br.right) { bar.scrollLeft += (r.left + r.width / 2) - (br.left + br.width / 2); tabArrows(); } } });
 }
 window.addEventListener("scroll", () => {
-  if ($("tabwrap").hidden || $("home").hidden) return;
+  if ($("tabwrap").hidden || $("home").hidden || S.inFocus) return;
   const y = $("tabwrap").getBoundingClientRect().bottom + 12; let cur = null;
   document.querySelectorAll("#list .sec").forEach((h) => { if (h.getBoundingClientRect().top <= y) cur = +h.id.slice(4); });
   if (cur === null) { const f = document.querySelector("#list .sec"); cur = f ? +f.id.slice(4) : 0; }
