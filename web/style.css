@@ -128,13 +128,15 @@ button{cursor:pointer}
 #signin input + input{margin-top:0}
 .row.flash .open{outline:3px solid var(--c-new);outline-offset:2px}
 
-/* sections as tabs: all five fit on a phone; count on top, short name under, the chosen one underlined */
-.tabs{position:sticky;top:0;z-index:2;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin:10px 0 12px;background:var(--bg);border-bottom:1px solid var(--line)}
-.tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:58px;border:none;background:none;padding:6px 2px 8px;color:var(--muted);min-width:0}
-.tab b{font-size:19px;font-weight:700;line-height:1.1;color:var(--fg)}
-.tab span{font-size:12.5px;font-weight:500;line-height:1.15;text-align:center;max-width:100%;min-height:2.3em;display:flex;align-items:flex-start;justify-content:center;overflow-wrap:anywhere}
-.tab:hover span{color:var(--fg)}
-.tab.on span{color:var(--fg);font-weight:700}
-.tab.on::after{content:"";position:absolute;left:6px;right:6px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--ink)}
-.tab.hot b{color:var(--hot)}
+/* sections as tabs: plain text, the chosen one underlined (tap to switch instead of scrolling) */
+.tabs{position:sticky;top:0;z-index:2;display:flex;gap:2px;overflow-x:auto;margin:10px 0 12px;background:var(--bg);border-bottom:1px solid var(--line);scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;position:relative;min-height:46px;border:none;background:none;padding:0 12px;font-weight:500;font-size:16px;white-space:nowrap;color:var(--muted)}
+.tab span{display:inline-block;min-width:22px;margin-inline-start:6px;padding:1px 7px;border-radius:6px;background:var(--card);color:var(--muted);font-size:13px;font-weight:700;line-height:1.5}
+.tab:hover{color:var(--fg)}
+.tab.on{color:var(--fg);font-weight:700}
+.tab.on::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--ink)}
+.tab.on span{background:var(--ink);color:var(--ink-fg)}
+.tab.hot span{background:#FBE3E7;color:var(--hot)}
+.tab.hot.on span{background:var(--hot);color:#fff}
 .tab.hot.on::after{background:var(--hot)}

@@ -159,8 +159,7 @@ function render() {
   const tabs = $("tabs");
   tabs.hidden = searching || !S.leads.size;
   if (!searching) {
-    const full = TABS();
-    const th = TABS_SHORT().map((name, i) => '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (S.tab === i ? " on" : "") + '" aria-selected="' + (S.tab === i) + '" aria-label="' + esc(full[i] + " (" + cnt[i] + ")") + '" data-tab="' + i + '"><b>' + cnt[i] + '</b><span>' + esc(name) + '</span></button>').join("");
+    const th = TABS().map((name, i) => '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (S.tab === i ? " on" : "") + '" aria-selected="' + (S.tab === i) + '" data-tab="' + i + '">' + esc(name) + ' <span>' + cnt[i] + '</span></button>').join("");
     if (tabs.innerHTML !== th) tabs.innerHTML = th;
   }
   const shown = searching ? r : r.filter((l) => l._t === S.tab);
@@ -243,8 +242,6 @@ function secOf(id) {
 }
 function TABS() { return [L("להתקשר קודם", "Call first"), L("בתהליך", "In progress"), L("ישנים, עוד לא חזרנו אליהם", "Old, never called"), L("טופלו היום", "Done today"), L("לחזור אליהם אחר כך", "Call later")]; }
 function secName(g) { return TABS()[g]; }
-// short names so all five tabs fit on a phone
-function TABS_SHORT() { return [L("להתקשר", "Call first"), L("בתהליך", "In progress"), L("לא טופלו", "Not called"), L("טופלו היום", "Done today"), L("אחר כך", "Later")]; }
 async function loadHist(id) {
   const { data } = await sb.from("lead_updates").select("*").eq("lead_id", id).order("at", { ascending: false }).limit(40);
   if (S.open !== id) return;
