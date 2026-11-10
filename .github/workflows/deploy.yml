@@ -85,7 +85,7 @@ jobs:
           MONDAY_API_TOKEN: ${{ secrets.MONDAY_API_TOKEN }}
           SITE_ORIGIN: ${{ vars.SITE_ORIGIN || 'https://lululab-ctrl.github.io' }}
         run: |
-          CRON_SECRET="$(printf '%s' "$CRON_SECRET" | tr -d '[:space:]')"
+          CRON_SECRET="$(printf '%s' "$CRON_SECRET" | LC_ALL=C tr -cd 'A-Za-z0-9')"
           args=()
           [ -n "$CRON_SECRET" ] && args+=("CRON_SECRET=$CRON_SECRET")
           [ -n "$MONDAY_API_TOKEN" ] && args+=("MONDAY_API_TOKEN=$MONDAY_API_TOKEN")
@@ -100,7 +100,8 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          CRON_SECRET="$(printf '%s' "$CRON_SECRET" | tr -d '[:space:]')"
+          CRON_SECRET="$(printf '%s' "$CRON_SECRET" | LC_ALL=C tr -cd 'A-Za-z0-9')"
+          if [ -n "$CRON_SECRET" ] && [ ${#CRON_SECRET} -lt 24 ]; then echo "::error title=CRON_SECRET too short::Use at least 24 letters and numbers."; exit 1; fi
           if [ -z "$CRON_SECRET" ]; then echo "::warning title=No CRON_SECRET::The every-minute sync stays off until CRON_SECRET is set."; exit 0; fi
           url="https://$REF.supabase.co/functions/v1/sync"
           case "$CRON_SECRET" in *'$s$'*) echo "::error::CRON_SECRET can't contain \$s\$"; exit 1;; esac

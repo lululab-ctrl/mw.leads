@@ -20,11 +20,7 @@ Deno.serve(async (req) => {
   if (sent) {
     const { data, error } = await db.rpc("cron_secret_ok", { s: sent });
     fromCron = data === true;
-    if (!fromCron) {
-      const fp = await db.rpc("cron_secret_fp");
-      const h = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(sent)))).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 8);
-      console.log("cron secret refused", error ? error.message : "no match", "sent " + sent.length + ":" + h, "vault " + (fp.data || fp.error?.message));
-    }
+    if (!fromCron) console.log("cron secret refused", error ? error.message : "no match");
   }
   if (!fromCron && !(await teamMember(req, db))) return json({ error: "not_team" }, 403);
 
