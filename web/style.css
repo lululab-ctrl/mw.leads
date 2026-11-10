@@ -148,3 +148,7 @@ button{cursor:pointer}
 .tab.hot span{background:#FBE3E7;color:var(--hot)}
 .tab.hot.on span{background:var(--hot);color:#fff}
 .tab.hot.on::after{background:var(--hot)}
+/* section starts under the tabs: a thin line instead of a second heading */
+#list .sec.divider{margin:14px 4px;height:0;border-top:1px dashed var(--line);font-size:0}
+#list .sec.divider.first{margin:0;border:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

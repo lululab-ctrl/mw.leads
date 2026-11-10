@@ -157,7 +157,7 @@ function render() {
   r.forEach((l) => { cnt[l._t]++; });
   $("tabwrap").hidden = searching || !S.leads.size;
   if (!searching) {
-    const th = names.map((name, i) => '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (S.tab === i ? " on" : "") + '" aria-selected="' + (S.tab === i) + '" data-tab="' + i + '">' + esc(name) + ' <span>' + cnt[i] + '</span></button>').join("");
+    const th = ORDER.map((i) => [names[i], i]).map(([name, i]) => '<button type="button" role="tab" class="tab' + (i === 0 ? " hot" : "") + (S.tab === i ? " on" : "") + '" aria-selected="' + (S.tab === i) + '" data-tab="' + i + '">' + esc(name) + ' <span>' + cnt[i] + '</span></button>').join("");
     if ($("tabs").innerHTML !== th) { $("tabs").innerHTML = th; tabArrows(); }
   }
   if (!r.length) {
@@ -165,9 +165,15 @@ function render() {
     render.h = ""; return;
   }
   let html = "", g0 = -1;
-  r.sort((a, b) => a._t - b._t);
+  r.sort((a, b) => ORDER.indexOf(a._t) - ORDER.indexOf(b._t));
   r.forEach((l) => {
-    if (l._t !== g0) { html += '<div class="sec' + (l._t === 0 ? " hot" : "") + '" id="sec-' + l._t + '">' + names[l._t] + ' <span>' + cnt[l._t] + '</span></div>'; g0 = l._t; }
+    // with the tabs on top, a section starts with a thin line (its name is read out, not shown twice)
+    if (l._t !== g0) {
+      html += searching
+        ? '<div class="sec' + (l._t === 0 ? " hot" : "") + '" id="sec-' + l._t + '">' + names[l._t] + ' <span>' + cnt[l._t] + '</span></div>' // search: no tabs, so the names show
+        : '<div class="sec divider' + (g0 === -1 ? " first" : "") + '" id="sec-' + l._t + '" role="heading" aria-level="3"><span class="sr">' + names[l._t] + ' ' + cnt[l._t] + '</span></div>';
+      g0 = l._t;
+    }
     html += rowHtml(l);
   });
   if (render.h !== html) { list.innerHTML = html; render.h = html; }
@@ -232,6 +238,8 @@ function secOf(id) {
 }
 function TABS() { return [L("להתקשר קודם", "Call first"), L("בתהליך", "In progress"), L("ישנים, עוד לא חזרנו אליהם", "Old, never called"), L("טופלו היום", "Done today"), L("לחזור אליהם אחר כך", "Call later")]; }
 function secName(g) { return TABS()[g]; }
+// the order of the tabs and the sections: Old, never called comes last (Jeinna, 10 Nov 2026)
+const ORDER = [0, 1, 3, 4, 2];
 async function loadHist(id) {
   const { data } = await sb.from("lead_updates").select("*").eq("lead_id", id).order("at", { ascending: false }).limit(40);
   if (S.open !== id) return;
