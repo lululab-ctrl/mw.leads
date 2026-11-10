@@ -1,7 +1,7 @@
 // One press on the lead screen: save the note (if any) and the answer to monday, as the
 // original page's finish(). The note is signed "— Name" so monday shows who really did it.
 import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/common.ts";
-import { BOARD, C, LOST, STATUSES, noteHtml } from "../_shared/signals.js";
+import { BOARD, C, LOST, STATUSES } from "../_shared/signals.js";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -31,23 +31,22 @@ Deno.serve(async (req) => {
   }
 
   if (noAnswer) text = "No answer" + (text ? "\n" + text : "");
-  // what monday gets: a status change is written into the update too, so monday shows who changed it
-  const statusLine = label && label !== l.status ? "Status: " + (l.status || "—") + " → " + label + (reason ? " (" + reason + ")" : "") : "";
-  const mondayText = [statusLine, text].filter(Boolean).join("\n");
   if (!label && !text) return json({ error: "note_required" }, 400);
 
   const kind = label ? "status" : noAnswer ? "no_answer" : "note";
-  // the presser's own monday account when connected (monday then shows them as the author);
-  // otherwise the shared token, and the note is signed with their name
+  // monday gets only the note itself, no names (Jeinna, 10 Nov 2026); who did it is kept here
+  // (note_authors, lead_updates, the stamp). A connected personal monday account is used when present.
   const { data: mine } = await db.from("monday_tokens").select("token").eq("email", me.email).maybeSingle();
   const own = mine?.token || undefined;
   const fields: Record<string, unknown> = {};
   let updateId: string | null = null;
   try {
-    if (mondayText) {
-      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: own ? "<p>" + mondayText.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)).replace(/\n/g, "<br>") + "</p>" : noteHtml(mondayText, me.name) }, own);
+    if (text) {
+      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: "<p>" + text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!)).replace(/\n/g, "<br>") + "</p>" }, own);
       updateId = d?.create_update?.id ? String(d.create_update.id) : null;
-      if (text) { fields.last_t = text.slice(0, 400); fields.last_at = Date.now(); fields.last_by = me.name; }
+      fields.last_t = text.slice(0, 400); fields.last_at = Date.now(); fields.last_by = me.name;
+      // monday shows the token's owner as the author; remember the real one for the sync and the history
+      if (updateId) await db.from("note_authors").upsert({ update_id: updateId, by: me.name, why: "MWP Leads" });
     }
     if (noAnswer) fields.na = (l.na || 0) + 1;
     if (label && label !== l.status) {
@@ -68,8 +67,7 @@ Deno.serve(async (req) => {
     // history rows, so the lead screen shows them at once (the sync keeps these, not monday's copies)
     const rows: any[] = [];
     if (text && updateId) rows.push({ id: updateId, lead_id: id, kind: "note", text, by: me.name, at: now, source: "app" });
-    // a status-only press posted one monday update: give the history row that update's id, so the sync doesn't add it twice
-    if (label && label !== l.status) rows.push({ id: (!text && updateId) ? updateId : "app-" + (act?.id || now), lead_id: id, kind: "status", text: (l.status || "—") + " → " + label + (reason ? " (" + reason + ")" : ""), by: me.name, at: now, source: "app" });
+    if (label && label !== l.status) rows.push({ id: "app-" + (act?.id || now), lead_id: id, kind: "status", text: (l.status || "—") + " → " + label + (reason ? " (" + reason + ")" : ""), by: me.name, at: now, source: "app" });
     if (rows.length) await db.from("lead_updates").upsert(rows);
     return json({ ok: true, fields });
   } catch (e) {
