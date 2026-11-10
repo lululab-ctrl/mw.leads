@@ -143,7 +143,7 @@ function render() {
   $("app").dir = S.lang === "he" ? "rtl" : "ltr";
   document.documentElement.lang = S.lang;
   $("lang").textContent = S.lang === "he" ? "EN" : "עב";
-  $("ttl").textContent = L("לידים", "Leads");
+  $("ttl").textContent = L("MWP לידים", "MWP Leads");
   $("q").placeholder = L("חיפוש שם", "Find a name");
   $("signout").textContent = L("יציאה", "Sign out");
   $("whoName").textContent = S.me ? S.me.name : (S.user ? S.user.email : "");
@@ -318,7 +318,7 @@ function errText(e) {
 
 /* ---------- sign-in ---------- */
 function renderSignin() {
-  $("siTtl").textContent = L("לידים", "Leads");
+  $("siTtl").textContent = L("MWP לידים", "MWP Leads");
   $("siSub").textContent = L("מתחברים עם המייל של הצוות. נשלח אליך קישור כניסה.", "Sign in with your team email. We'll email you a sign-in link.");
   $("siEmail").placeholder = L("המייל שלך", "Your email");
   $("siBtn").textContent = L("לשלוח לי קישור", "Email me a link");
