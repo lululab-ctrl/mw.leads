@@ -483,17 +483,28 @@ function leadLang(l) { return S.tplLang || (/hebrew/i.test(l.lang || "") || /[\u
 function callBlock(l) {
   if (!l.fuAt || l.fuState === "Done") return '<button type="button" class="soft schedule" data-act="schedule">📅 ' + L("לקבוע שיחה", "Schedule a call") + '</button>';
   const lang = leadLang(l), late = l.fuAt < Date.now(), today = new Date(l.fuAt).toDateString() === new Date().toDateString();
+  const hasMail = l.email && /@/.test(l.email), wa = tel(l.phone);
+  const day = new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", { timeZone: "Asia/Jerusalem", weekday: "short", day: "numeric", month: "short" }).format(new Date(l.fuAt));
+  const hm = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }).format(new Date(l.fuAt));
+  const ICAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>';
+  const IWA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21l1.7-4.6A8.5 8.5 0 1 1 8 19.5L3 21z"/></svg>';
+  const ICP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>';
   return '<div class="callcard' + (late ? " late" : today ? " today" : "") + '">' +
-    '<div class="cc-t">📞 ' + L("שיחה: ", "Call: ") + esc(callShort(l.fuAt)) + (late ? ' <span>' + L("· עבר הזמן", "· overdue") + '</span>' : "") + '</div>' +
-    '<div class="cc-l"><span>' + L("שפת ההודעה:", "Message language:") + '</span> <button type="button" class="lng' + (lang === "en" ? " on" : "") + '" data-tpl="en">English</button><button type="button" class="lng' + (lang === "he" ? " on" : "") + '" data-tpl="he">עברית</button></div>' +
-    '<div class="cc-g">' +
-    (l.email && /@/.test(l.email) ? '<a class="soft" target="_blank" rel="noopener" href="' + esc(gcalLink(l, lang, false)) + '">' + L("הזמנה ביומן (מייל)", "Calendar invite (email)") + '</a>' : '<a class="soft" target="_blank" rel="noopener" href="' + esc(gcalLink(l, lang, false)) + '">' + L("להוסיף ליומן שלי", "Add to my calendar") + '</a>') +
-    (tel(l.phone) ? '<a class="soft" target="_blank" rel="noopener" href="https://wa.me/' + esc(tel(l.phone).slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + L("לשלוח בוואטסאפ", "Send on WhatsApp") + '</a>' : '') +
-    '<button type="button" class="soft" data-act="copywa">' + L("העתקת הודעת וואטסאפ", "Copy WhatsApp message") + '</button>' +
-    '<button type="button" class="soft" data-act="copymail">' + L("העתקת המייל", "Copy email") + '</button>' +
-    '<button type="button" class="soft" data-act="copysubj">' + L("העתקת נושא המייל", "Copy email subject") + '</button>' +
+    '<div class="cc-top"><div><div class="cc-when">' + esc(day) + ' · ' + esc(hm) + '</div>' +
+      '<div class="cc-sub">' + (late ? L("עבר הזמן · ", "Overdue · ") : today ? L("היום · ", "Today · ") : "") + L("שיחת המשך · שעון ישראל", "Follow-up call · Israel time") + '</div></div>' +
+      '<div class="seg" role="group" aria-label="' + L("שפת ההודעות", "Message language") + '"><button type="button" class="' + (lang === "en" ? "on" : "") + '" data-tpl="en">EN</button><button type="button" class="' + (lang === "he" ? "on" : "") + '" data-tpl="he">עב</button></div></div>' +
+    '<div class="cc-h">' + L("להזמין את הלקוח/ה", "Invite the client") + '</div>' +
+    '<div class="cc-main">' +
+      '<a class="cc-btn" target="_blank" rel="noopener" href="' + esc(gcalLink(l, lang, false)) + '">' + ICAL + '<span>' + (hasMail ? L("הזמנה ביומן", "Calendar invite") : L("להוסיף ליומן", "Add to calendar")) + '</span></a>' +
+      (wa ? '<a class="cc-btn" target="_blank" rel="noopener" href="https://wa.me/' + esc(wa.slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + IWA + '<span>WhatsApp</span></a>' : '') +
     '</div>' +
-    '<div class="cc-g two2"><button type="button" class="soft" data-act="schedule">' + L("לשנות מועד", "Reschedule") + '</button><button type="button" class="soft" data-act="calldone">' + L("השיחה התקיימה ✓", "Call done ✓") + '</button></div>' +
+    (hasMail ? '' : '<div class="cc-note">' + L("אין מייל לליד הזה, אז ההזמנה ביומן נשמרת רק אצלך.", "No email for this lead, so the calendar event is only for you.") + '</div>') +
+    '<div class="cc-copy"><span>' + L("העתקה:", "Copy:") + '</span>' +
+      '<button type="button" data-act="copywa">' + ICP + L("וואטסאפ", "WhatsApp") + '</button>' +
+      '<button type="button" data-act="copymail">' + ICP + L("מייל", "Email") + '</button>' +
+      '<button type="button" data-act="copysubj">' + ICP + L("נושא", "Subject") + '</button></div>' +
+    '<div class="cc-foot"><button type="button" class="cc-link" data-act="schedule">' + L("לשנות מועד", "Reschedule") + '</button>' +
+      '<button type="button" class="cc-done" data-act="calldone">✓ ' + L("השיחה התקיימה", "Call done") + '</button></div>' +
     '</div>';
 }
 function scheduleDialog() {
