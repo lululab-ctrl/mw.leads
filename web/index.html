@@ -25,7 +25,7 @@
   <div id="home" class="gut" hidden><div class="col">
     <div class="hd">
       <h1><span id="ttl"></span><small><i class="live" id="dot"></i><span id="sync"></span></small></h1>
-      <button class="sm" id="refresh" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg></button>
+      <button class="sm rep" id="repBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 20V11M12 20V4M19 20v-6"/></svg><span id="repLbl"></span></button>
       <button class="sm" id="lang" type="button"></button>
     </div>
     <div id="banner" class="banner" hidden></div>
@@ -52,6 +52,7 @@
     <button class="later" id="later" type="button" hidden></button>
     <div class="who"><span id="whoName"></span> · <button type="button" id="chpw"></button> · <button type="button" id="signout"></button></div>
   </div></div>
+  <div id="report" class="gut" hidden><div class="col" id="repBody"></div></div>
   <div id="lead" class="gut" hidden><div class="col" id="leadBody"></div></div>
   <div class="dlg" id="delDlg" role="dialog" aria-modal="true" aria-labelledby="delTtl" hidden>
     <div class="dlgbox">

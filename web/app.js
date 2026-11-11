@@ -171,6 +171,7 @@ function render() {
   document.documentElement.lang = S.lang;
   $("lang").textContent = S.lang === "he" ? "EN" : "עב";
   $("ttl").textContent = L("MWP לידים", "MWP Leads");
+  $("repLbl").textContent = L("דוח", "Report");
   $("q").placeholder = L("חיפוש", "Search");
   $("signout").textContent = L("יציאה", "Sign out");
   $("whoName").textContent = S.me ? S.me.name : (S.user ? S.user.email : "");
@@ -209,7 +210,7 @@ function render() {
   const cnt = [0, 0, 0, 0, 0];
   r.forEach((l) => { cnt[l._t]++; });
   if (!r.length) {
-    list.innerHTML = '<div class="empty">' + (fo ? L("אין כרגע לידים בפוקוס הזה. אפשר להוסיף ליד מתוך הליד עצמו, או לערוך את הפוקוס.", "No leads in this focus right now. Add one from inside a lead, or edit the focus.") : S.leads.size ? L("אין כאן אף אחד.", "Nobody here.") : (S.syncing ? L("מביאים את הלידים…", "Getting your leads…") : L("אין עדיין לידים. לוחצים על רענון.", "No leads yet. Tap refresh."))) + '</div>';
+    list.innerHTML = '<div class="empty">' + (fo ? L("אין כרגע לידים בפוקוס הזה. אפשר להוסיף ליד מתוך הליד עצמו, או לערוך את הפוקוס.", "No leads in this focus right now. Add one from inside a lead, or edit the focus.") : S.leads.size ? L("אין כאן אף אחד.", "Nobody here.") : (S.syncing ? L("מביאים את הלידים…", "Getting your leads…") : L("אין עדיין לידים.", "No leads yet."))) + '</div>';
     render.h = ""; return;
   }
   let html = "", g0 = -1;
@@ -273,7 +274,9 @@ function renderLead(id, fresh) {
 function closeLead() {
   const id = S.open; S.open = null; S.openCopy = null; clearInterval(S.hb); release(id);
   try { localStorage.removeItem("mwpl.open"); } catch (_) {}
-  $("lead").hidden = true; $("home").hidden = !S.user;
+  $("lead").hidden = true;
+  if (!$("report").hidden) { renderReport(); return; } // opened from the report: back to it
+  $("home").hidden = !S.user;
   render();
   window.scrollTo(0, S.listY || 0); // back exactly where you were
   // if what you did moved the lead, say where it went
@@ -770,7 +773,6 @@ window.addEventListener("resize", tabArrows);
 function slideTabs(dir) { const t = $("tabs"), rtl = getComputedStyle(t).direction === "rtl"; t.scrollLeft += dir * (rtl ? -1 : 1) * t.clientWidth * 0.7; tabArrows(); }
 $("tNext").addEventListener("click", () => slideTabs(1));
 $("tPrev").addEventListener("click", () => slideTabs(-1));
-$("refresh").addEventListener("click", () => sync(true));
 $("lang").addEventListener("click", () => {
   S.lang = S.lang === "he" ? "en" : "he";
   try { localStorage.setItem("mwpl.lang", S.lang); } catch (_) {}
@@ -784,7 +786,6 @@ function setSync() {
   const d = $("dot"), t = $("sync");
   d.className = "live" + (S.syncing ? " busy" : S.err ? " err" : S.syncAt || S.metaAt ? " on" : "");
   t.textContent = S.syncing ? L("מסתנכרן עם monday…", "Syncing with monday…") : S.err ? L("אין חיבור ל-monday", "Not connected to monday") : Math.max(S.syncAt, S.metaAt) ? L("מסונכרן עם monday · ", "In sync with monday · ") + ago(Math.max(S.syncAt, S.metaAt)) : L("מתחבר…", "Connecting…");
-  $("refresh").classList.toggle("spin", S.syncing);
 }
 function banner(msg, kind, retry) {
   const b = $("banner"); if (!msg) { b.hidden = true; return; }
@@ -802,6 +803,137 @@ function errText(e) {
   if (c === "tool_error") return L("monday החזיר שגיאה: ", "monday returned an error: ") + ((e && e.message) || "");
   return L("monday לא עונה כרגע. מוצגת הרשימה האחרונה שנשמרה.", "monday isn't answering right now. Showing the last saved list.");
 }
+
+/* ---------- Report: how many leads each person worked on (Jeinna, 11 Nov 2026) ----------
+   Counts every note, status change and call each person made, in this app and directly in monday,
+   from the start of MWP Leads' record (13 Oct 2026). Claude and automations aren't counted for anyone.
+   A lead counts once per person in the period, however many things they did on it. Israel days. */
+const REP_PEOPLE = ["Jeinna", "Matan", "Eliran", "Emilia"];
+const REP_HE = { Jeinna: "ג׳ינה", Matan: "מתן", Eliran: "אלירן", Emilia: "אמיליה" };
+const REP_START = "2026-10-13";
+const R = { mode: "week", day: null, from: REP_START, to: null, open: {}, rows: null, key: "", busy: false };
+// Israel midnight of a calendar day "YYYY-MM-DD"
+function ilMid(ymd) { const [y, m, d] = ymd.split("-").map(Number), u = Date.UTC(y, m - 1, d); return u - ilOffset(u); }
+function addDays(ymd, n) { const [y, m, d] = ymd.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); }
+function addMonths(ymd, n) { const [y, m] = ymd.split("-").map(Number); return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 10); }
+function dow(ymd) { const [y, m, d] = ymd.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); }
+function fmtDay(ymd, withYear) {
+  const [y, m, d] = ymd.split("-").map(Number), o = { day: "numeric", month: "short", timeZone: "UTC" };
+  if (withYear) o.year = "numeric";
+  return new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", o).format(new Date(Date.UTC(y, m - 1, d)));
+}
+// the period on screen: [first day, last day] in Israel dates, plus its label
+function repRange() {
+  const today = iso(Date.now()), d = R.day || today;
+  if (R.mode === "day") return { a: d, b: d, label: d === today ? L("היום", "Today") : d === addDays(today, -1) ? L("אתמול", "Yesterday") : fmtDay(d, false) };
+  if (R.mode === "week") { const a = addDays(d, -dow(d)), b = addDays(a, 6); return { a, b, label: a === addDays(today, -dow(today)) ? L("השבוע", "This week") : fmtDay(a) + " – " + fmtDay(b) }; }
+  if (R.mode === "month") {
+    const a = d.slice(0, 8) + "01", b = addDays(addMonths(a, 1), -1), [y, m] = a.split("-").map(Number);
+    return { a, b, label: a === today.slice(0, 8) + "01" ? L("החודש", "This month") : new Intl.DateTimeFormat(S.lang === "he" ? "he-IL" : "en-GB", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, 1))) };
+  }
+  if (R.mode === "all") return { a: REP_START, b: today, label: L("מאז ההתחלה", "Since the start") };
+  const a = R.from || REP_START, b = R.to || today;
+  return a <= b ? { a, b, label: fmtDay(a, true) + " – " + fmtDay(b, true) } : { a: b, b: a, label: fmtDay(b, true) + " – " + fmtDay(a, true) };
+}
+function repStep(n) {
+  const d = R.day || iso(Date.now());
+  R.day = R.mode === "day" ? addDays(d, n) : R.mode === "week" ? addDays(d, 7 * n) : addMonths(d.slice(0, 8) + "01", n);
+  renderReport(); loadReport();
+}
+async function loadReport() {
+  const r = repRange(), t0 = ilMid(r.a), t1 = ilMid(addDays(r.b, 1)), key = t0 + "-" + t1;
+  if (R.key === key && R.rows) return;
+  R.key = key; R.rows = null; R.busy = true; renderReport();
+  let out = [], o = 0;
+  for (;;) { // 3 minutes either side, to see the Claude note that goes with a status change
+    const { data, error } = await sb.from("lead_updates").select("id,lead_id,kind,text,by,at,bot,source")
+      .gte("at", t0 - 180000).lt("at", t1 + 180000).order("at", { ascending: true }).range(o, o + 999);
+    if (R.key !== key) return;
+    if (error) { R.busy = false; R.err = true; renderReport(); return; }
+    out = out.concat(data || []); if (!data || data.length < 1000) break; o += 1000;
+  }
+  R.rows = out; R.busy = false; R.err = false; R.t0 = t0; R.t1 = t1; renderReport();
+}
+function repCount() {
+  const by = {}, other = {}, seen = {}, lead = {};
+  REP_PEOPLE.forEach((p) => { by[p] = { leads: new Map(), notes: 0, st: 0, calls: 0, won: 0, lost: 0 }; });
+  (R.rows || []).forEach((h) => { (lead[h.lead_id] = lead[h.lead_id] || []).push(h); });
+  (R.rows || []).forEach((h) => {
+    const at = +h.at; if (at < R.t0 || at >= R.t1) return;
+    const who = histWho(h, lead[h.lead_id]);
+    const p = REP_PEOPLE.indexOf(who) >= 0 ? by[who] : null;
+    if (!p) { const k = who === "Claude" ? "Claude" : L("אוטומציה", "Automation"); other[k] = (other[k] || 0) + 1; return; }
+    const to = h.kind === "status" ? String(h.text || "").split("→").pop().trim() : "";
+    if (h.kind === "status") { // the same change seen twice (from this app and from monday's log) counts once
+      const k = h.lead_id + "|" + who + "|" + to;
+      if (seen[k] && Math.abs(seen[k] - at) < 300000) return; seen[k] = at;
+      p.st++; if (/^Won/.test(to)) p.won++; if (/^Lost/.test(to)) p.lost++;
+    } else if (h.kind === "call") { if (h.text !== "done") p.calls++; } else p.notes++;
+    const was = p.leads.get(h.lead_id);
+    if (!was || was.at <= at) p.leads.set(h.lead_id, { at, kind: h.kind, text: h.kind === "status" ? to : h.kind === "call" ? (h.text === "done" ? "done" : h.text) : String(h.text || "") , n: (was ? was.n : 0) + 1 });
+    else was.n++;
+  });
+  return { by, other };
+}
+function repWhat(x) {
+  if (x.kind === "status") { const m = /^([^(]+?)\s*(\((.+)\))?$/.exec(x.text) || []; const s = STM[(m[1] || "").trim()]; return L("סטטוס ← ", "Status → ") + (s ? L(s.he, s.en) : x.text) + (m[3] ? " (" + m[3] + ")" : ""); }
+  if (x.kind === "call") return x.text === "done" ? L("השיחה התקיימה", "Call done") : L("שיחה נקבעה: ", "Call scheduled: ") + x.text;
+  const t = unsignNote(x.text); return t.length > 70 ? t.slice(0, 70) + "…" : t;
+}
+// the note text without its "— Name · date" signature
+function unsignNote(t) { return String(t || "").replace(/\n?\s*— [^\n—·]{1,40}?\s*(·[^\n—]{0,40})?\s*$/, "").replace(/\s+/g, " ").trim(); }
+function renderReport() {
+  if ($("report").hidden) return;
+  const r = repRange(), modes = [["day", L("יום", "Day")], ["week", L("שבוע", "Week")], ["month", L("חודש", "Month")], ["all", L("הכול", "All")], ["custom", L("טווח", "Range")]];
+  const today = iso(Date.now()), canNext = R.mode !== "all" && R.mode !== "custom" && r.b < today;
+  let h = '<button type="button" class="back" data-r="close">✕ ' + L("סגירה", "Close") + '</button>' +
+    '<h2 class="name">' + L("דוח עבודה", "Work report") + '</h2>' +
+    '<div class="rseg" role="tablist">' + modes.map((m) => '<button type="button" role="tab" data-mode="' + m[0] + '"' + (R.mode === m[0] ? ' class="on" aria-selected="true"' : "") + '>' + m[1] + '</button>').join("") + '</div>';
+  if (R.mode === "custom") h += '<div class="rcustom"><label>' + L("מ-", "From") + '<input type="date" id="rFrom" min="' + REP_START + '" max="' + today + '" value="' + esc(R.from || REP_START) + '"></label><label>' + L("עד", "To") + '<input type="date" id="rTo" min="' + REP_START + '" max="' + today + '" value="' + esc(R.to || today) + '"></label></div>';
+  h += '<div class="rper">' + (R.mode !== "all" && R.mode !== "custom" ? '<button type="button" class="rarr" data-step="-1" aria-label="' + L("הקודם", "Previous") + '">' + L("›", "‹") + '</button>' : "") +
+    '<b>' + esc(r.label) + '</b>' + (R.mode !== "all" && R.mode !== "custom" ? '<button type="button" class="rarr" data-step="1"' + (canNext ? "" : " disabled") + ' aria-label="' + L("הבא", "Next") + '">' + L("‹", "›") + '</button>' : "") + '</div>';
+  if (R.err) h += '<div class="empty">' + L("הדוח לא נטען. ", "The report didn't load. ") + '<button type="button" class="soft" data-r="retry">' + L("לנסות שוב", "Try again") + '</button></div>';
+  else if (!R.rows) h += '<div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  else {
+    const { by, other } = repCount(), total = new Set();
+    REP_PEOPLE.forEach((p) => by[p].leads.forEach((_, id) => total.add(id)));
+    h += '<div class="rtotal">' + L("סה״כ לידים שטופלו: ", "Leads worked on, all together: ") + '<b>' + total.size + '</b></div>';
+    h += REP_PEOPLE.map((p) => {
+      const x = by[p], n = x.leads.size, list = [...x.leads.entries()].sort((a, b) => b[1].at - a[1].at);
+      const bits = [[x.notes, L("הערה", "note"), L("הערות", "notes")], [x.st, L("שינוי סטטוס", "status change"), L("שינויי סטטוס", "status changes")], [x.calls, L("שיחה נקבעה", "call scheduled"), L("שיחות נקבעו", "calls scheduled")], [x.won, L("נרשם/ה", "won"), L("נרשמו", "won")], [x.lost, L("לא רלוונטי", "lost"), L("לא רלוונטיים", "lost")]].filter((b) => b[0]).map((b) => b[0] + " " + (b[0] === 1 ? b[1] : b[2])).join(" · ");
+      return '<div class="rcard' + (n ? "" : " zero") + '"><div class="rtop"><span class="rname">' + esc(L(REP_HE[p], p)) + '</span><span class="rnum">' + n + '<small>' + (n === 1 ? L("ליד", "lead") : L("לידים", "leads")) + '</small></span></div>' +
+        (bits ? '<div class="rbits">' + esc(bits) + '</div>' : '<div class="rbits">' + L("לא טיפל/ה בלידים בתקופה הזו.", "No leads worked on in this period.") + '</div>') +
+        (n ? '<button type="button" class="rmore" data-who="' + p + '">' + (R.open[p] ? L("הסתרת הלידים", "Hide the leads") : L("הצגת הלידים", "Show the leads")) + '</button>' : "") +
+        (n && R.open[p] ? '<div class="rlist">' + list.map(([id, v]) => {
+          const l = S.leads.get(id);
+          return '<div class="ritem">' + (l ? '<button type="button" class="rlead" data-lead="' + esc(id) + '">' + esc(l.name || "") + '</button>' : '<a class="rlead closed" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(id) + '">' + L("ליד סגור (פתיחה ב-monday)", "Closed lead (open in monday)") + '</a>') +
+            '<small>' + esc(repWhat(v)) + ' · ' + esc(when(v.at)) + (v.n > 1 ? L(" · " + v.n + " פעולות", " · " + v.n + " actions") : "") + '</small></div>';
+        }).join("") + '</div>' : "") + '</div>';
+    }).join("");
+    const oth = Object.keys(other).map((k) => k + " " + other[k]).join(" · ");
+    h += '<p class="rnote">' + L("סופר כל הערה, שינוי סטטוס ושיחה של כל אחד, בכלי וגם ישירות ב-monday. ליד נספר פעם אחת לכל אדם בתקופה. Claude ואוטומציות לא נספרים לאף אחד", "Counts every note, status change and call each person made, here and directly in monday. A lead counts once per person in the period. Claude and automations aren't counted for anyone") +
+      (oth ? " (" + L("בתקופה הזו: ", "this period: ") + esc(oth) + ")" : "") + ". " + L("הרישום מתחיל ב-13.10.2026. שעון ישראל.", "The record starts 13 Oct 2026. Israel time.") + '</p>';
+  }
+  $("repBody").innerHTML = h;
+}
+function openReport() { $("report").hidden = false; $("home").hidden = true; R.y = window.scrollY; renderReport(); loadReport(); $("report").scrollTop = 0; }
+function closeReport() { $("report").hidden = true; $("home").hidden = !S.user; render(); window.scrollTo(0, R.y || 0); }
+$("repBtn").addEventListener("click", openReport);
+$("report").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button"); if (!b) return;
+  if (b.dataset.r === "close") return closeReport();
+  if (b.dataset.r === "retry") { R.key = ""; return loadReport(); }
+  if (b.dataset.mode) { R.mode = b.dataset.mode; R.day = null; R.open = {}; renderReport(); return loadReport(); }
+  if (b.dataset.step) return repStep(+b.dataset.step);
+  if (b.dataset.who) { R.open[b.dataset.who] = !R.open[b.dataset.who]; return renderReport(); }
+  if (b.dataset.lead) openLead(b.dataset.lead);
+});
+$("report").addEventListener("change", (ev) => {
+  if (ev.target.id === "rFrom") R.from = ev.target.value || REP_START;
+  else if (ev.target.id === "rTo") R.to = ev.target.value || null;
+  else return;
+  renderReport(); loadReport();
+});
 
 /* ---------- sign-in: email + password (accounts are made by Jeinna in Supabase; no emails are sent) ---------- */
 function renderSignin() {

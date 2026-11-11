@@ -39,12 +39,24 @@
       if (table === "sync_meta") return { data: { at: now - 20000 }, error: null };
       if (table === "team") return { data: { name: "Jeinna", email: "tester@example.com", can_delete: !location.hash.includes("nodelete") }, error: null };
       if (table === "lead_locks") return { data: [{ lead_id: "7", by_email: "emilia@example.com", by_name: "Emilia", at: new Date().toISOString(), expires: new Date(Date.now() + 6e5).toISOString() }], error: null };
+      if (table === "lead_updates" && st.rep) { const M = 6e4; return { data: [
+        { id: "r1", lead_id: "1", kind: "note", text: "Called, interested\n— Matan · 11.11.2026 10:00", by: "Matan", at: now - 30 * M, source: "app", bot: false },
+        { id: "r2", lead_id: "1", kind: "status", text: "New Lead → In conversation", by: "Matan", at: now - 29 * M, source: "app", bot: false },
+        { id: "st-1-x", lead_id: "1", kind: "status", text: "New Lead → In conversation", by: "Matan", at: now - 28 * M, source: "monday", bot: false },
+        { id: "r3", lead_id: "6", kind: "status", text: "Offer sent → Won", by: "Emilia", at: now - 20 * M, source: "app", bot: false },
+        { id: "r4", lead_id: "2", kind: "call", text: "15.11.2026 12:00", by: "Emilia", at: now - 19 * M, source: "app", bot: false },
+        { id: "r5", lead_id: "99999", kind: "status", text: "In conversation → Lost (Price)", by: "Emilia", at: now - 18 * M, source: "monday", bot: false },
+        { id: "r6", lead_id: "3", kind: "note", text: "Sent an email (11.11, Claude)", by: "Matan", at: now - 10 * M, source: "monday", bot: false },
+        { id: "r7", lead_id: "3", kind: "status", text: "New Lead → In conversation", by: "Matan", at: now - 9 * M, source: "monday", bot: false },
+        { id: "r8", lead_id: "8", kind: "note", text: "הליד לחץ על הכפתור", by: "Flow Admin", at: now - 8 * M, source: "monday", bot: true },
+        { id: "r9", lead_id: "4", kind: "note", text: "Spoke with Maya\n— Eliran · 11.11.2026 09:00", by: "Eliran", at: now - 7 * M, source: "monday", bot: false },
+      ].filter((r) => r.at >= st.gte && r.at < st.lt), error: null }; }
       if (table === "lead_updates") return { data: [
         { id: "u2", lead_id: "1", kind: "status", text: "New Lead → In conversation", by: "Eliran", at: now - 2 * H, source: "monday", bot: false },
         { id: "u1", lead_id: "1", kind: "note", text: "הליד לחץ על הכפתור", by: "Flow Admin", at: now - 3 * H, source: "monday", bot: true }], error: null };
       return { data: null, error: null };
     };
-    const api = { select() { return api; }, limit() { return Promise.resolve(res()); }, eq() { return api; }, order() { return api; }, maybeSingle() { return Promise.resolve(res()); },
+    const api = { gte(k, v) { st.rep = true; st.gte = v; return api; }, lt(k, v) { st.lt = v; return api; }, range() { return Promise.resolve(res()); }, select() { return api; }, limit() { return Promise.resolve(res()); }, eq() { return api; }, order() { return api; }, maybeSingle() { return Promise.resolve(res()); },
       then(ok, bad) { return Promise.resolve(res()).then(ok, bad); } };
     return api;
   };
