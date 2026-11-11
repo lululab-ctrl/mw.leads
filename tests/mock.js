@@ -53,6 +53,12 @@
         { id: "b16n", lead_id: "16", kind: "note", text: "No answer 3 times", by: "Matan", at: now - 5 * D, source: "app", bot: false },
         { id: "b16", lead_id: "16", kind: "status", text: "In conversation → Lost", by: "Matan", at: now - 50 * M, source: "monday", bot: false },
         { id: "b11r", lead_id: "11", kind: "status", text: "Lost → In conversation", by: "Emilia", at: now - 6 * M, source: "app", bot: false },
+        { id: "t1", lead_id: "2", kind: "tap", text: "call", by: "Emilia", at: now - 25 * M, source: "app", bot: false },
+        { id: "t2", lead_id: "4", kind: "tap", text: "call", by: "Emilia", at: now - 24 * M, source: "app", bot: false },
+        { id: "t3", lead_id: "7", kind: "tap", text: "whatsapp", by: "Emilia", at: now - 23 * M, source: "app", bot: false },
+        { id: "t4", lead_id: "1", kind: "tap", text: "call", by: "Matan", at: now - 31 * M, source: "app", bot: false },
+        { id: "n5", lead_id: "9", kind: "note", text: "No answer", by: "Eliran", at: now - 12 * M, source: "app", bot: false },
+        { id: "q1", lead_id: "4", kind: "status", text: "In conversation → Qualified", by: "Emilia", at: now - 22 * M, source: "app", bot: false },
         { id: "r9", lead_id: "4", kind: "note", text: "Spoke with Maya\n— Eliran · 11.11.2026 09:00", by: "Eliran", at: now - 7 * M, source: "monday", bot: false },
       ].filter((r) => st.ids ? st.ids.indexOf(r.lead_id) >= 0 : r.at >= st.gte && r.at < st.lt), error: null }; }
       if (table === "lead_updates") return { data: [
