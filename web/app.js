@@ -971,26 +971,12 @@ function leadLink(id) {
   return l ? '<button type="button" class="rlead" data-lead="' + esc(id) + '">' + esc(l.name || "") + '</button>'
     : '<a class="rlead closed" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(id) + '">' + L("ליד סגור (פתיחה ב-monday)", "Closed lead (open in monday)") + '</a>';
 }
-// the team, right now: new leads nobody has called for a day, and follow-up calls that are late
-function rightNow() {
-  const now = Date.now(); let fresh = 0, late = 0;
-  S.leads.forEach((l) => {
-    const touched = (l.last && isPerson(l.last.by)) || l.na || (/^Status/.test(l.changedWhat || "") && isPerson(l.changedBy));
-    if (l.status === "New Lead" && l.created && l.created < now - 864e5 && l.created > now - 14 * 864e5 && !touched) fresh++;
-    if (isCall(l) && callLate(l)) late++;
-  });
-  return { fresh, late };
-}
 function renderReport() {
   if ($("report").hidden) return;
   const r = repRange(), modes = [["day", L("יום", "Day")], ["week", L("שבוע", "Week")], ["month", L("חודש", "Month")], ["all", L("הכול", "All")], ["custom", L("טווח", "Range")]];
   const today = iso(Date.now()), canNext = R.mode !== "all" && R.mode !== "custom" && r.b < today;
   let h = '<button type="button" class="back" data-r="close">✕ ' + L("סגירה", "Close") + '</button>' +
     '<h2 class="name">' + L("דוח עבודה", "Work report") + '</h2>';
-  const rn = rightNow();
-  h += '<div class="rnow"><b>' + L("עכשיו", "Right now") + '</b>' +
-    '<span class="' + (rn.fresh ? "bad" : "") + '"><i>' + rn.fresh + '</i>' + L("לידים חדשים שאף אחד לא התקשר אליהם 24 שעות", "new leads nobody has called in 24 hours") + '</span>' +
-    '<span class="' + (rn.late ? "bad" : "") + '"><i>' + rn.late + '</i>' + L("שיחות חוזרות באיחור", "follow-up calls overdue") + '</span></div>';
   h += '<div class="rseg" role="tablist">' + modes.map((m) => '<button type="button" role="tab" data-mode="' + m[0] + '"' + (R.mode === m[0] ? ' class="on" aria-selected="true"' : "") + '>' + m[1] + '</button>').join("") + '</div>';
   if (R.mode === "custom") h += '<div class="rcustom"><label>' + L("מ-", "From") + '<input type="date" id="rFrom" min="' + REP_START + '" max="' + today + '" value="' + esc(R.from || REP_START) + '"></label><label>' + L("עד", "To") + '<input type="date" id="rTo" min="' + REP_START + '" max="' + today + '" value="' + esc(R.to || today) + '"></label></div>';
   h += '<div class="rper">' + (R.mode !== "all" && R.mode !== "custom" ? '<button type="button" class="rarr" data-step="-1" aria-label="' + L("הקודם", "Previous") + '">' + L("›", "‹") + '</button>' : "") +

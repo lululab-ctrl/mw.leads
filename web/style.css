@@ -306,11 +306,6 @@ button{cursor:pointer}
 .rlost{background:var(--bg);border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:14.5px;color:var(--muted)}
 .rlost b{color:var(--fg);font-size:16px}
 .rsub{font-size:17px;margin-top:4px}
-.rnow{display:flex;flex-direction:column;gap:6px;background:var(--card);border-radius:16px;padding:12px 14px}
-.rnow b{font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.rnow span{display:flex;align-items:center;gap:10px;font-size:15.5px}
-.rnow i{font-style:normal;font-weight:900;font-size:22px;min-width:34px}
-.rnow span.bad i{color:var(--hot)}
 .rlegend{display:none}
 .r3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 16px 12px}
 .r3 span{background:var(--bg);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;font-size:12.5px;font-weight:700;color:var(--muted);line-height:1.2}
