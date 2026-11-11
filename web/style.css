@@ -328,3 +328,13 @@ button{cursor:pointer}
 .pend b{font-size:22px;font-weight:900}
 .pend span{color:var(--muted);font-size:15px}
 .pend .two .big{min-height:56px}
+.rtab{overflow-x:auto;border-radius:16px;background:var(--card)}
+.rtab table{width:100%;border-collapse:collapse;font-size:15px}
+.rtab th,.rtab td{padding:12px 8px;text-align:center;border-bottom:1px solid var(--line)}
+.rtab tr:last-child th,.rtab tr:last-child td{border-bottom:none}
+.rtab thead th{font-size:12.5px;color:var(--muted);font-weight:700;line-height:1.2;vertical-align:bottom}
+.rtab tbody th{text-align:start;font-weight:900;font-size:16px;white-space:nowrap;padding-inline-start:14px}
+.rtab td{font-size:20px;font-weight:900}
+.rtab td.zero{color:var(--line)}
+.rtab td.good{color:var(--call)}
+.rtab td.bad{color:var(--hot);background:#FBE3E7}
