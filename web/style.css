@@ -333,3 +333,8 @@ button{cursor:pointer}
 .rtab td.zero{color:var(--line)}
 .rtab td.good{color:var(--call)}
 .rtab td.bad{color:var(--hot);background:#FBE3E7}
+.rleg{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rleg li{display:flex;gap:10px;align-items:baseline;font-size:14.5px;color:var(--muted);line-height:1.35}
+.rleg b{flex:none;width:112px;color:var(--fg);font-weight:900}
+.rleg b.good{color:var(--call)}
+.rleg b.bad{color:var(--hot)}

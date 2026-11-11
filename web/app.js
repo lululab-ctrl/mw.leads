@@ -994,8 +994,15 @@ function renderReport() {
     h += '<div class="rtab"><table><thead><tr><th></th>' + cols.map((c) => '<th>' + c[0] + '</th>').join("") + '</tr></thead><tbody>' +
       ranked.map((p) => '<tr><th>' + esc(L(REP_HE[p], p)) + '</th>' + cols.map((c) => { const v = c[1](p); return '<td class="' + (v ? c[2] : "zero") + '">' + v + '</td>'; }).join("") + '</tr>').join("") +
       '</tbody></table></div>';
-    h += '<p class="rnote">' + L("שיחות = לחיצות על להתקשר, וואטסאפ, העתקת מספר ולא ענה. התקדמו = לידים שעברו לבשיחה, מתאים, נשלחה הצעה, התחייב/ה או נרשם/ה. דגלים = לא רלוונטי בלי ניסיון קשר לפני, או שיחה בלי שנרשם מה קרה. שינויים בבת אחת (5+ תוך 10 דקות) לא נספרים. Claude ואוטומציות לא נספרים. מ-1.11.2026, שעון ישראל.",
-      "Calls = Call, WhatsApp, Copy number and No answer taps. Moved forward = leads taken to In conversation, Qualified, Offer sent, Committed or Won. Red flags = Lost with no try before it, or a call with nothing logged after. Bulk changes (5+ within 10 minutes) aren't counted. Claude and automations aren't counted. From 1 Nov 2026, Israel time.") + '</p>';
+    // what each number means, one short line each (Jeinna, 11 Nov 2026)
+    const legend = [
+      [L("שיחות", "Calls"), L("לחיצות על להתקשר, וואטסאפ, העתקת מספר ולא ענה", "Taps on Call, WhatsApp, Copy number and No answer"), ""],
+      [L("התקדמו", "Moved forward"), L("לידים שעברו קדימה: בשיחה, מתאים, נשלחה הצעה, התחייב/ה או נרשם/ה", "Leads moved ahead: In conversation, Qualified, Offer sent, Committed or Won"), "good"],
+      [L("נרשמו", "Won"), L("לידים שנרשמו", "Leads who signed up"), "good"],
+      [L("לא רלוונטי", "Lost"), L("לידים שסומנו לא רלוונטי", "Leads marked Lost"), ""],
+      [L("דגלים", "Red flags"), L("לא רלוונטי בלי ניסיון קשר קודם, או שיחה בלי שנרשם מה קרה", "Lost with no try first, or a call with nothing logged after"), "bad"]];
+    h += '<ul class="rleg">' + legend.map((x) => '<li><b class="' + x[2] + '">' + x[0] + '</b><span>' + x[1] + '</span></li>').join("") + '</ul>' +
+      '<p class="rnote">' + L("לא נספרים: Claude, אוטומציות, ושינויים בבת אחת (5+ תוך 10 דקות). מ-1.11.2026, שעון ישראל.", "Not counted: Claude, automations, and bulk changes (5+ within 10 minutes). From 1 Nov 2026, Israel time.") + '</p>';
   }
   $("repBody").innerHTML = h;
 }
