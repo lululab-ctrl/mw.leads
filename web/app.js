@@ -1001,8 +1001,11 @@ function renderReport() {
       [L("נרשמו", "Won"), L("לידים שנרשמו", "Leads who signed up"), "good"],
       [L("לא רלוונטי", "Lost"), L("לידים שסומנו לא רלוונטי", "Leads marked Lost"), ""],
       [L("דגלים", "Red flags"), L("לא רלוונטי בלי ניסיון קשר קודם, או שיחה בלי שנרשם מה קרה", "Lost with no try first, or a call with nothing logged after"), "bad"]];
-    h += '<ul class="rleg">' + legend.map((x) => '<li><b class="' + x[2] + '">' + x[0] + '</b><span>' + x[1] + '</span></li>').join("") + '</ul>' +
-      '<p class="rnote">' + L("לא נספרים: Claude, אוטומציות, ושינויים בבת אחת (5+ תוך 10 דקות). מ-1.11.2026, שעון ישראל.", "Not counted: Claude, automations, and bulk changes (5+ within 10 minutes). From 1 Nov 2026, Israel time.") + '</p>';
+    // hidden until asked: a small table of what each number means
+    h += '<details class="rleg"><summary>' + L("מה המספרים אומרים?", "What do the numbers mean?") + '</summary><table>' +
+      legend.map((x) => '<tr><th class="' + x[2] + '">' + x[0] + '</th><td>' + x[1] + '</td></tr>').join("") +
+      '<tr><th>' + L("לא נספרים", "Not counted") + '</th><td>' + L("Claude, אוטומציות, ושינויים בבת אחת (5+ תוך 10 דקות)", "Claude, automations, and bulk changes (5+ within 10 minutes)") + '</td></tr>' +
+      '</table><p>' + L("מ-1.11.2026, שעון ישראל.", "From 1 Nov 2026, Israel time.") + '</p></details>';
   }
   $("repBody").innerHTML = h;
 }
