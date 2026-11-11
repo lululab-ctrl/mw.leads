@@ -811,7 +811,7 @@ function errText(e) {
 const REP_PEOPLE = ["Jeinna", "Matan", "Eliran", "Emilia"];
 const REP_HE = { Jeinna: "ג׳ינה", Matan: "מתן", Eliran: "אלירן", Emilia: "אמיליה" };
 const REP_START = "2026-11-01"; // the report counts from 1 Nov 2026 (Jeinna, 11 Nov 2026)
-const R = { mode: "week", day: null, from: REP_START, to: null, open: {}, rows: null, key: "", busy: false };
+const R = { mode: "week", day: null, from: REP_START, to: null, open: {}, openLost: {}, metric: "leads", rows: null, lh: {}, key: "", busy: false };
 // Israel midnight of a calendar day "YYYY-MM-DD"
 function ilMid(ymd) { const [y, m, d] = ymd.split("-").map(Number), u = Date.UTC(y, m - 1, d); return u - ilOffset(u); }
 function addDays(ymd, n) { const [y, m, d] = ymd.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); }
@@ -852,11 +852,19 @@ async function loadReport() {
     if (error) { R.busy = false; R.err = true; renderReport(); return; }
     out = out.concat(data || []); if (!data || data.length < 1000) break; o += 1000;
   }
-  R.rows = out; R.busy = false; R.err = false; R.t0 = t0; R.t1 = t1; renderReport();
+  // every lead marked Lost in the period: its whole history, to see what happened before and after
+  const ids = [...new Set(out.filter((h) => h.kind === "status" && /→\s*Lost/.test(h.text || "") && +h.at >= t0 && +h.at < t1).map((h) => h.lead_id))], lh = {};
+  for (let i = 0; i < ids.length; i += 80) {
+    const { data, error } = await sb.from("lead_updates").select("id,lead_id,kind,text,by,at,bot,source").in("lead_id", ids.slice(i, i + 80)).order("at", { ascending: true }).limit(5000);
+    if (R.key !== key) return;
+    if (error) { R.busy = false; R.err = true; renderReport(); return; }
+    (data || []).forEach((h) => { (lh[h.lead_id] = lh[h.lead_id] || []).push(h); });
+  }
+  R.rows = out; R.lh = lh; R.busy = false; R.err = false; R.t0 = t0; R.t1 = t1; renderReport();
 }
 function repCount() {
   const by = {}, other = {}, seen = {}, lead = {};
-  REP_PEOPLE.forEach((p) => { by[p] = { leads: new Map(), notes: 0, st: 0, calls: 0, to: {} }; });
+  REP_PEOPLE.forEach((p) => { by[p] = { leads: new Map(), notes: 0, st: 0, calls: 0, to: {}, lost: [] }; });
   (R.rows || []).forEach((h) => { (lead[h.lead_id] = lead[h.lead_id] || []).push(h); });
   (R.rows || []).forEach((h) => {
     const at = +h.at; if (at < R.t0 || at >= R.t1) return;
@@ -869,6 +877,7 @@ function repCount() {
       if (seen[k] && Math.abs(seen[k] - at) < 300000) return; seen[k] = at;
       p.st++; // each status a person moved leads to: a lead counts once per status
       const base = to.replace(/\s*\(.*\)$/, ""); if (base && base !== "—") (p.to[base] = p.to[base] || new Set()).add(h.lead_id);
+      if (base === "Lost") p.lost.push({ id: h.lead_id, at, to });
     } else if (h.kind === "call") { if (h.text !== "done") p.calls++; } else p.notes++;
     const was = p.leads.get(h.lead_id);
     if (!was || was.at <= at) p.leads.set(h.lead_id, { at, kind: h.kind, text: h.kind === "status" ? to : h.kind === "call" ? (h.text === "done" ? "done" : h.text) : String(h.text || "") , n: (was ? was.n : 0) + 1 });
@@ -883,6 +892,29 @@ function repWhat(x) {
 }
 // the note text without its "— Name · date" signature
 function unsignNote(t) { return String(t || "").replace(/\n?\s*— [^\n—·]{1,40}?\s*(·[^\n—]{0,40})?\s*$/, "").replace(/\s+/g, " ").trim(); }
+// Lost check (Jeinna, 11 Nov 2026): is a person marking leads Lost without a reason? For each Lost:
+// a reason picked (Lost (Price) …), a note by a person within an hour, contact before it (a note or call
+// over an hour earlier), done in bulk (5+ Lost by that person within 10 minutes), reopened later.
+function lostCheck(list) {
+  const H = 36e5, out = { n: 0, reason: 0, note: 0, tried: 0, bulk: 0, reopened: 0, bare: [] }, seen = new Set();
+  list.forEach((e) => {
+    if (seen.has(e.id)) return; seen.add(e.id); out.n++;
+    const hist = R.lh[e.id] || [], person = (x) => REP_PEOPLE.indexOf(histWho(x, hist)) >= 0;
+    const reason = /\(.+\)/.test(e.to);
+    const note = hist.some((x) => x.kind === "note" && person(x) && Math.abs(+x.at - e.at) <= H);
+    const tried = hist.some((x) => (x.kind === "note" || x.kind === "call") && person(x) && +x.at < e.at - H);
+    const bulk = list.filter((o) => Math.abs(o.at - e.at) <= 6e5).length >= 5;
+    const reopened = hist.some((x) => x.kind === "status" && +x.at > e.at && !/Lost/.test(String(x.text || "").split("→").pop()));
+    if (reason) out.reason++; if (note) out.note++; if (tried) out.tried++; if (bulk) out.bulk++; if (reopened) out.reopened++;
+    if (!reason && !note && !tried) out.bare.push({ id: e.id, at: e.at, bulk, reopened });
+  });
+  return out;
+}
+function leadLink(id) {
+  const l = S.leads.get(id);
+  return l ? '<button type="button" class="rlead" data-lead="' + esc(id) + '">' + esc(l.name || "") + '</button>'
+    : '<a class="rlead closed" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(id) + '">' + L("ליד סגור (פתיחה ב-monday)", "Closed lead (open in monday)") + '</a>';
+}
 // how many leads were moved to each status, in the board's order; statuses nobody moved to are left out
 function stGrid(to) {
   const c = ST.filter((x) => to[x.k] && to[x.k].size).concat(Object.keys(to).filter((k) => !STM[k]).map((k) => ({ k, c: "na", he: k, en: k }))); // e.g. Community
@@ -904,22 +936,43 @@ function renderReport() {
   else {
     const { by, other } = repCount(), total = new Set();
     REP_PEOPLE.forEach((p) => by[p].leads.forEach((_, id) => total.add(id)));
-    const team = {}; REP_PEOPLE.forEach((p) => Object.keys(by[p].to).forEach((k) => by[p].to[k].forEach((id) => (team[k] = team[k] || new Set()).add(id))));
-    h += '<div class="rcard rteam"><div class="rtop"><span class="rname">' + L("כל הצוות", "The whole team") + '</span><span class="rnum">' + total.size + '<small>' + (total.size === 1 ? L("ליד", "lead") : L("לידים", "leads")) + '</small></span></div>' + stGrid(team) + '</div>';
-    h += REP_PEOPLE.map((p) => {
-      const x = by[p], n = x.leads.size, list = [...x.leads.entries()].sort((a, b) => b[1].at - a[1].at);
+    const lc = {}; REP_PEOPLE.forEach((p) => { lc[p] = lostCheck(by[p].lost); });
+    const stKeys = [...new Set(REP_PEOPLE.flatMap((p) => Object.keys(by[p].to)))];
+    const metrics = [["leads", L("לידים שטופלו", "Leads worked on"), "ink"]].concat(ST.filter((x) => stKeys.indexOf(x.k) >= 0).map((x) => [x.k, L(x.he, x.en), x.c]))
+      .concat(stKeys.filter((k) => !STM[k]).map((k) => [k, k, "na"]));
+    if (!metrics.some((m) => m[0] === R.metric)) R.metric = "leads";
+    const val = (p) => R.metric === "leads" ? by[p].leads.size : (by[p].to[R.metric] ? by[p].to[R.metric].size : 0);
+    const ranked = REP_PEOPLE.slice().sort((a, b) => val(b) - val(a) || by[b].leads.size - by[a].leads.size), top = Math.max(1, val(ranked[0]));
+    const mcol = (metrics.find((m) => m[0] === R.metric) || metrics[0])[2];
+    h += '<div class="rtotal">' + L("כל הצוות: ", "The whole team: ") + '<b>' + total.size + '</b> ' + L("לידים שטופלו", "leads worked on") + '</div>';
+    h += '<div class="rmet">' + metrics.map((m) => '<button type="button" data-metric="' + esc(m[0]) + '"' + (R.metric === m[0] ? ' class="on"' : "") + '>' + esc(m[1]) + '</button>').join("") + '</div>';
+    let rank = 0, prev = -1;
+    h += ranked.map((p, i) => {
+      const x = by[p], n = x.leads.size, v = val(p), c = lc[p];
+      if (v !== prev) { rank = i + 1; prev = v; }
+      const medal = v ? (["🥇", "🥈", "🥉"][rank - 1] || rank) : "–";
       const bits = [[x.notes, L("הערה", "note"), L("הערות", "notes")], [x.calls, L("שיחה נקבעה", "call scheduled"), L("שיחות נקבעו", "calls scheduled")]].filter((b) => b[0]).map((b) => b[0] + " " + (b[0] === 1 ? b[1] : b[2])).join(" · ");
-      return '<div class="rcard' + (n ? "" : " zero") + '"><div class="rtop"><span class="rname">' + esc(L(REP_HE[p], p)) + '</span><span class="rnum">' + n + '<small>' + (n === 1 ? L("ליד", "lead") : L("לידים", "leads")) + '</small></span></div>' +
-        (n ? stGrid(x.to) : "") + (n ? (bits ? '<div class="rbits">' + esc(bits) + '</div>' : "") : '<div class="rbits">' + L("לא טיפל/ה בלידים בתקופה הזו.", "No leads worked on in this period.") + '</div>') +
-        (n ? '<button type="button" class="rmore" data-who="' + p + '">' + (R.open[p] ? L("הסתרת הלידים", "Hide the leads") : L("הצגת הלידים", "Show the leads")) + '</button>' : "") +
-        (n && R.open[p] ? '<div class="rlist">' + list.map(([id, v]) => {
-          const l = S.leads.get(id);
-          return '<div class="ritem">' + (l ? '<button type="button" class="rlead" data-lead="' + esc(id) + '">' + esc(l.name || "") + '</button>' : '<a class="rlead closed" target="_blank" rel="noopener" href="https://matanwildphotography.monday.com/boards/' + BOARD + '/pulses/' + esc(id) + '">' + L("ליד סגור (פתיחה ב-monday)", "Closed lead (open in monday)") + '</a>') +
-            '<small>' + esc(repWhat(v)) + ' · ' + esc(when(v.at)) + (v.n > 1 ? L(" · " + v.n + " פעולות", " · " + v.n + " actions") : "") + '</small></div>';
-        }).join("") + '</div>' : "") + '</div>';
+      const warn = c.bare.length ? '<div class="rwarn">⚠ ' + c.bare.length + L(" סומנו לא רלוונטי בלי סיבה, הערה או ניסיון קשר", " marked Lost with no reason, note or earlier contact") + '</div>' : "";
+      let body = "";
+      if (R.open[p] && n) {
+        body += stGrid(x.to) + (bits ? '<div class="rbits">' + esc(bits) + '</div>' : "");
+        if (c.n) {
+          const ln = [[c.reason, L("עם סיבה", "with a reason")], [c.note, L("עם הערה", "with a note")], [c.tried, L("אחרי ניסיון קשר קודם", "after earlier contact")], [c.bulk, L("בבת אחת (5+ תוך 10 דק׳)", "in bulk (5+ within 10 min)")], [c.reopened, L("נפתחו מחדש אחר כך", "reopened later")]];
+          body += '<div class="rlost"><b>' + L("בדיקת לא רלוונטי", "Lost check") + ': ' + c.n + '</b>' + ln.map((q) => '<span>' + q[0] + ' ' + q[1] + '</span>').join("") +
+            (c.bare.length ? '<button type="button" class="rmore" data-lostwho="' + p + '">' + (R.openLost[p] ? L("הסתרה", "Hide them") : L("הצגת ה-" + c.bare.length + " בלי הסבר", "Show the " + c.bare.length + " unexplained")) + '</button>' : "") +
+            (R.openLost[p] ? '<div class="rlist">' + c.bare.sort((a, b) => b.at - a.at).map((e) => '<div class="ritem">' + leadLink(e.id) + '<small>' + esc(when(e.at)) + (e.bulk ? L(" · בבת אחת", " · in bulk") : "") + (e.reopened ? L(" · נפתח מחדש", " · reopened") : "") + '</small></div>').join("") + '</div>' : "") + '</div>';
+        }
+        const list = [...x.leads.entries()].sort((a, b) => b[1].at - a[1].at);
+        body += '<div class="q rsub">' + L("הלידים", "The leads") + '</div><div class="rlist">' + list.map(([id, w]) => '<div class="ritem">' + leadLink(id) +
+          '<small>' + esc(repWhat(w)) + ' · ' + esc(when(w.at)) + (w.n > 1 ? L(" · " + w.n + " פעולות", " · " + w.n + " actions") : "") + '</small></div>').join("") + '</div>';
+      }
+      return '<div class="rcard rrow' + (n ? "" : " zero") + (R.open[p] ? " open" : "") + '"><button type="button" class="rhead" data-who="' + p + '"' + (n ? "" : " disabled") + '>' +
+        '<span class="rmed">' + medal + '</span><span class="rmid"><span class="rname">' + esc(L(REP_HE[p], p)) + '</span>' +
+        '<span class="rbar"><i class="st-' + mcol + '" style="width:' + Math.round(100 * v / top) + '%"></i></span></span>' +
+        '<span class="rnum">' + v + '</span><span class="rchev">' + (n ? (R.open[p] ? "▴" : "▾") : "") + '</span></button>' + warn + body + '</div>';
     }).join("");
     const oth = Object.keys(other).map((k) => k + " " + other[k]).join(" · ");
-    h += '<p class="rnote">' + L("סופר כל הערה, שינוי סטטוס ושיחה של כל אחד, בכלי וגם ישירות ב-monday. ליד נספר פעם אחת לכל אדם בתקופה, ופעם אחת לכל סטטוס שאליו הועבר. Claude ואוטומציות לא נספרים לאף אחד", "Counts every note, status change and call each person made, here and directly in monday. A lead counts once per person in the period, and once per status it was moved to. Claude and automations aren't counted for anyone") +
+    h += '<p class="rnote">' + L("סופר כל הערה, שינוי סטטוס ושיחה של כל אחד, בכלי וגם ישירות ב-monday. ליד נספר פעם אחת לכל אדם בתקופה, ופעם אחת לכל סטטוס שאליו הועבר. לוחצים על שם לפרטים. Claude ואוטומציות לא נספרים לאף אחד", "Counts every note, status change and call each person made, here and directly in monday. A lead counts once per person in the period, and once per status it was moved to. Tap a name for the details. Claude and automations aren't counted for anyone") +
       (oth ? " (" + L("בתקופה הזו: ", "this period: ") + esc(oth) + ")" : "") + ". " + L("הדוח סופר מ-1.11.2026. שעון ישראל.", "The report counts from 1 Nov 2026. Israel time.") + '</p>';
   }
   $("repBody").innerHTML = h;
@@ -934,6 +987,8 @@ $("report").addEventListener("click", (ev) => {
   if (b.dataset.mode) { R.mode = b.dataset.mode; R.day = null; R.open = {}; renderReport(); return loadReport(); }
   if (b.dataset.step) return repStep(+b.dataset.step);
   if (b.dataset.who) { R.open[b.dataset.who] = !R.open[b.dataset.who]; return renderReport(); }
+  if (b.dataset.lostwho) { R.openLost[b.dataset.lostwho] = !R.openLost[b.dataset.lostwho]; return renderReport(); }
+  if (b.dataset.metric) { R.metric = b.dataset.metric; return renderReport(); }
   if (b.dataset.lead) openLead(b.dataset.lead);
 });
 $("report").addEventListener("change", (ev) => {

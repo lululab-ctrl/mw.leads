@@ -287,3 +287,22 @@ button{cursor:pointer}
 .rs b{font-size:22px;font-weight:900}
 .rs span{font-size:13px;font-weight:700}
 .rteam{background:var(--bg);border:2px solid var(--line)}
+.st-ink{--sx:var(--ink)}
+.rmet{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.rmet::-webkit-scrollbar{display:none}
+.rmet button{flex:none;min-height:38px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg);padding:0 14px;font-weight:700;font-size:14px;color:var(--muted)}
+.rmet button.on{background:var(--ink);border-color:var(--ink);color:var(--ink-fg)}
+.rrow{padding:0;gap:0}
+.rhead{display:flex;align-items:center;gap:12px;width:100%;border:none;background:none;padding:14px 16px;text-align:start;color:var(--fg)}
+.rmed{flex:none;width:34px;font-size:24px;font-weight:900;text-align:center}
+.rmid{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:6px}
+.rbar{display:block;height:10px;border-radius:6px;background:var(--line);overflow:hidden}
+.rbar i{display:block;height:100%;border-radius:6px;background:var(--sx);min-width:0}
+.rrow .rnum{flex:none;min-width:44px;text-align:end}
+.rchev{flex:none;width:14px;color:var(--muted);font-size:14px}
+.rrow > .rwarn,.rrow > .rst,.rrow > .rbits,.rrow > .rlost,.rrow > .rsub,.rrow > .rlist{margin:0 16px 10px}
+.rrow.open{padding-bottom:6px}
+.rwarn{color:var(--hot);font-weight:700;font-size:14.5px}
+.rlost{background:var(--bg);border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:14.5px;color:var(--muted)}
+.rlost b{color:var(--fg);font-size:16px}
+.rsub{font-size:17px;margin-top:4px}
