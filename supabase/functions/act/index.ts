@@ -42,6 +42,16 @@ Deno.serve(async (req) => {
     return json({ ok: false, code: "locked", by: lock.by_name }, 409);
   }
 
+  // a tap on Call, WhatsApp or Copy number (Jeinna with Matan's OK, 11 Nov 2026): recorded in MWP Leads
+  // only, for the report. Nothing goes to monday and the lead itself isn't changed.
+  if (b.tap) {
+    const kind = ["call", "whatsapp", "copy"].includes(String(b.tap)) ? String(b.tap) : "call";
+    const now = Date.now();
+    const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "tap", status_from: l.status, note: kind }).select("id").single();
+    await db.from("lead_updates").upsert({ id: "tap-" + (act?.id || now), lead_id: id, kind: "tap", text: kind, by: me.name, at: now, source: "app" });
+    return json({ ok: true });
+  }
+
   // follow-up call: Follow Up Date (date + time, Israel time in, UTC to monday) and Follow Up = Follow-Up.
   // No monday update is posted (so nobody gets an email); the call shows in MWP Leads' history.
   if (b.schedule && typeof b.schedule === "object") {

@@ -309,7 +309,7 @@ function renderHist() {
   const el = $("hist"); if (!el) return;
   if (!S.hist.length) { el.innerHTML = '<div class="hi muted">' + L("אין עדיין היסטוריה.", "No history yet.") + '</div>'; return; }
   el.innerHTML = S.hist.map((h) => '<div class="hi' + (h.bot ? " bot" : "") + '"><div class="ht">' +
-    (h.kind === "status" ? '<b>' + L("סטטוס: ", "Status: ") + esc(h.text) + '</b>' : h.kind === "call" ? '<b>📞 ' + (h.text === "done" ? L("השיחה התקיימה", "Call done") : L("שיחה נקבעה: ", "Call scheduled: ") + esc(h.text)) + '</b>' : esc(h.text)) +
+    (h.kind === "status" ? '<b>' + L("סטטוס: ", "Status: ") + esc(h.text) + '</b>' : h.kind === "tap" ? '<b>📲 ' + esc(repWhat(h)) + '</b>' : h.kind === "call" ? '<b>📞 ' + (h.text === "done" ? L("השיחה התקיימה", "Call done") : L("שיחה נקבעה: ", "Call scheduled: ") + esc(h.text)) + '</b>' : esc(h.text)) +
     '</div><small>' + esc(histWho(h, S.hist)) + ' · ' + esc(when(+h.at)) + (h.source === "app" ? L(" · מהכלי", " · from this app") : L(" · ב-monday", " · in monday")) + '</small></div>').join("");
 }
 

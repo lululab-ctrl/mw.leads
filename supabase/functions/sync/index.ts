@@ -5,7 +5,7 @@ import { admin, cors, json, monday, MondayError, teamMember } from "../_shared/c
 import { BOARD, C, SKIP_GROUPS, differs, fromItem, historyRow, historyText, merge, signals, stamp, statusLog, teamName } from "../_shared/signals.js";
 
 // only the columns MWP Leads uses (Follow Up Date's value carries its time)
-const BASIC = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate, C.fu];
+const BASIC = [C.status, C.phone, C.email, C.source, C.interest, C.about, C.lang, C.fuDate, C.fu, C.lost];
 const BASIC_FIELDS = `id name created_at group { id } column_values(ids: ${JSON.stringify(BASIC)}) { id text value }`;
 
 function iso(d: Date) { return d.toISOString().slice(0, 10); }
@@ -79,6 +79,8 @@ Deno.serve(async (req) => {
     // 2b. status changes made in monday, with who made them (monday's activity log)
     const logsByLead: Record<string, any[]> = {};
     const statusRows: any[] = [];
+    const lostWhy: Record<string, string> = {};
+    for (const it of items) { const v = (it.column_values || []).find((c: any) => c.id === C.lost); if (v && v.text) lostWhy[String(it.id)] = String(v.text).slice(0, 40); }
     try {
       const days = meta?.full_done ? 2 : 30;
       const fromIso = new Date(Date.now() - days * 864e5).toISOString();
@@ -103,7 +105,9 @@ Deno.serve(async (req) => {
         // a status change Claude made shows under the person's account, a moment before Claude's note
         if ((sig[l.lead_id]?.claude || []).some((c: number) => Math.abs(c - l.at) < 180000)) l.by = "Claude";
         (logsByLead[l.lead_id] ||= []).push(l);
-        statusRows.push({ id: "st-" + l.lead_id + "-" + l.at, lead_id: l.lead_id, kind: "status", text: (l.from || "—") + " → " + l.to, by: l.by, at: l.at, source: "monday", bot: false });
+        // a Lost set in monday carries the reason picked there (Lost reason column), so the report sees it
+        const why = l.to === "Lost" ? lostWhy[l.lead_id] : "";
+        statusRows.push({ id: "st-" + l.lead_id + "-" + l.at, lead_id: l.lead_id, kind: "status", text: (l.from || "—") + " → " + l.to + (why ? " (" + why + ")" : ""), by: l.by, at: l.at, source: "monday", bot: false });
       }
     } catch (e) {
       if (e instanceof MondayError && e.code !== "tool_error") throw e;

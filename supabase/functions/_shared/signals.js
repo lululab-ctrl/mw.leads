@@ -197,6 +197,7 @@ export function histLine(r) {
   return whenIL(Number(r.at)) + " · " + histWho(r) + " · " + what;
 }
 export function historyText(rows, max = 1900) {
+  rows = (rows || []).filter((r) => r.kind !== "tap"); // taps stay in MWP Leads; monday's history shows what was done
   rows = [...rows].filter((r) => r && r.at);
   // a status change made by Claude shows under the person's monday account, a moment before Claude's note
   const claude = rows.filter((r) => r.kind === "note" && CLAUDE_RE.test(String(r.text || "")));
