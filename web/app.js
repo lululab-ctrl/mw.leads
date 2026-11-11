@@ -653,6 +653,7 @@ async function fn(name, body) {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token, apikey: CFG.supabaseAnonKey },
     body: JSON.stringify(body || {}),
+    keepalive: !!(body && body.tap), // a tap's save finishes even when Call or WhatsApp opens another app right away
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw { code: j.code || j.error || "error", message: j.message || "", by: j.by || "" };
