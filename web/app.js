@@ -868,7 +868,7 @@ function repCount() {
       const k = h.lead_id + "|" + who + "|" + to;
       if (seen[k] && Math.abs(seen[k] - at) < 300000) return; seen[k] = at;
       p.st++; // each status a person moved leads to: a lead counts once per status
-      const base = to.replace(/\s*\(.*\)$/, ""); if (STM[base]) (p.to[base] = p.to[base] || new Set()).add(h.lead_id);
+      const base = to.replace(/\s*\(.*\)$/, ""); if (base && base !== "—") (p.to[base] = p.to[base] || new Set()).add(h.lead_id);
     } else if (h.kind === "call") { if (h.text !== "done") p.calls++; } else p.notes++;
     const was = p.leads.get(h.lead_id);
     if (!was || was.at <= at) p.leads.set(h.lead_id, { at, kind: h.kind, text: h.kind === "status" ? to : h.kind === "call" ? (h.text === "done" ? "done" : h.text) : String(h.text || "") , n: (was ? was.n : 0) + 1 });
@@ -885,7 +885,7 @@ function repWhat(x) {
 function unsignNote(t) { return String(t || "").replace(/\n?\s*— [^\n—·]{1,40}?\s*(·[^\n—]{0,40})?\s*$/, "").replace(/\s+/g, " ").trim(); }
 // how many leads were moved to each status, in the board's order; statuses nobody moved to are left out
 function stGrid(to) {
-  const c = ST.filter((x) => to[x.k] && to[x.k].size);
+  const c = ST.filter((x) => to[x.k] && to[x.k].size).concat(Object.keys(to).filter((k) => !STM[k]).map((k) => ({ k, c: "na", he: k, en: k }))); // e.g. Community
   if (!c.length) return '<div class="rbits">' + L("לא שינה/תה סטטוס בתקופה הזו.", "No status changes in this period.") + '</div>';
   return '<div class="rst">' + c.map((x) => '<div class="rs st-' + x.c + '"><b>' + to[x.k].size + '</b><span>' + esc(L(x.he, x.en)) + '</span></div>').join("") + '</div>';
 }
