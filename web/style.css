@@ -343,3 +343,4 @@ button{cursor:pointer}
 .rleg th.good{color:var(--call)}
 .rleg th.bad{color:var(--hot)}
 .rleg p{margin:0;padding:8px 14px 12px;border-top:1px solid var(--line);font-size:13px}
+.rleg td b{color:var(--fg);font-weight:700}

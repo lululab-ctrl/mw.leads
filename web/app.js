@@ -1000,7 +1000,7 @@ function renderReport() {
       [L("התקדמו", "Moved forward"), L("לידים שעברו קדימה: בשיחה, מתאים, נשלחה הצעה, התחייב/ה או נרשם/ה", "Leads moved ahead: In conversation, Qualified, Offer sent, Committed or Won"), "good"],
       [L("נרשמו", "Won"), L("לידים שנרשמו", "Leads who signed up"), "good"],
       [L("לא רלוונטי", "Lost"), L("לידים שסומנו לא רלוונטי", "Leads marked Lost"), ""],
-      [L("דגלים", "Red flags"), L("לא רלוונטי בלי ניסיון קשר קודם, או שיחה בלי שנרשם מה קרה", "Lost with no try first, or a call with nothing logged after"), "bad"]];
+      [L("דגלים", "Red flags"), L("<b>לא רלוונטי בלי ניסיון:</b> סומן לא רלוונטי בלי לנסות קודם. תקין אחרי 3 פעמים לא ענה, או עם סיבה + ניסיון אחד לפחות.<br><b>שיחה בלי תוצאה:</b> לחצו להתקשר, וואטסאפ או העתקה, ולא נרשם כלום תוך 3 שעות.", "<b>Lost without trying:</b> marked Lost without trying first. OK after 3 No answers, or with a reason plus at least one try.<br><b>Called, no outcome:</b> tapped Call, WhatsApp or Copy, and nothing was logged within 3 hours."), "bad"]];
     // hidden until asked: a small table of what each number means
     h += '<details class="rleg"><summary>' + L("מה המספרים אומרים?", "What do the numbers mean?") + '</summary><table>' +
       legend.map((x) => '<tr><th class="' + x[2] + '">' + x[0] + '</th><td>' + x[1] + '</td></tr>').join("") +
