@@ -282,3 +282,8 @@ button{cursor:pointer}
 .rlead.closed{color:var(--muted);font-weight:500}
 .ritem small{font-size:13.5px;color:var(--muted);overflow-wrap:anywhere;unicode-bidi:plaintext;text-align:start}
 .rnote{font-size:13.5px;color:var(--muted);margin:4px 0 0;line-height:1.5}
+.rst{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin-top:2px}
+.rs{background:var(--sx);color:var(--on,#fff);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;line-height:1.15}
+.rs b{font-size:22px;font-weight:900}
+.rs span{font-size:13px;font-weight:700}
+.rteam{background:var(--bg);border:2px solid var(--line)}

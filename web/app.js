@@ -856,7 +856,7 @@ async function loadReport() {
 }
 function repCount() {
   const by = {}, other = {}, seen = {}, lead = {};
-  REP_PEOPLE.forEach((p) => { by[p] = { leads: new Map(), notes: 0, st: 0, calls: 0, won: 0, lost: 0 }; });
+  REP_PEOPLE.forEach((p) => { by[p] = { leads: new Map(), notes: 0, st: 0, calls: 0, to: {} }; });
   (R.rows || []).forEach((h) => { (lead[h.lead_id] = lead[h.lead_id] || []).push(h); });
   (R.rows || []).forEach((h) => {
     const at = +h.at; if (at < R.t0 || at >= R.t1) return;
@@ -867,7 +867,8 @@ function repCount() {
     if (h.kind === "status") { // the same change seen twice (from this app and from monday's log) counts once
       const k = h.lead_id + "|" + who + "|" + to;
       if (seen[k] && Math.abs(seen[k] - at) < 300000) return; seen[k] = at;
-      p.st++; if (/^Won/.test(to)) p.won++; if (/^Lost/.test(to)) p.lost++;
+      p.st++; // each status a person moved leads to: a lead counts once per status
+      const base = to.replace(/\s*\(.*\)$/, ""); if (STM[base]) (p.to[base] = p.to[base] || new Set()).add(h.lead_id);
     } else if (h.kind === "call") { if (h.text !== "done") p.calls++; } else p.notes++;
     const was = p.leads.get(h.lead_id);
     if (!was || was.at <= at) p.leads.set(h.lead_id, { at, kind: h.kind, text: h.kind === "status" ? to : h.kind === "call" ? (h.text === "done" ? "done" : h.text) : String(h.text || "") , n: (was ? was.n : 0) + 1 });
@@ -882,6 +883,12 @@ function repWhat(x) {
 }
 // the note text without its "— Name · date" signature
 function unsignNote(t) { return String(t || "").replace(/\n?\s*— [^\n—·]{1,40}?\s*(·[^\n—]{0,40})?\s*$/, "").replace(/\s+/g, " ").trim(); }
+// how many leads were moved to each status, in the board's order; statuses nobody moved to are left out
+function stGrid(to) {
+  const c = ST.filter((x) => to[x.k] && to[x.k].size);
+  if (!c.length) return '<div class="rbits">' + L("לא שינה/תה סטטוס בתקופה הזו.", "No status changes in this period.") + '</div>';
+  return '<div class="rst">' + c.map((x) => '<div class="rs st-' + x.c + '"><b>' + to[x.k].size + '</b><span>' + esc(L(x.he, x.en)) + '</span></div>').join("") + '</div>';
+}
 function renderReport() {
   if ($("report").hidden) return;
   const r = repRange(), modes = [["day", L("יום", "Day")], ["week", L("שבוע", "Week")], ["month", L("חודש", "Month")], ["all", L("הכול", "All")], ["custom", L("טווח", "Range")]];
@@ -897,12 +904,13 @@ function renderReport() {
   else {
     const { by, other } = repCount(), total = new Set();
     REP_PEOPLE.forEach((p) => by[p].leads.forEach((_, id) => total.add(id)));
-    h += '<div class="rtotal">' + L("סה״כ לידים שטופלו: ", "Leads worked on, all together: ") + '<b>' + total.size + '</b></div>';
+    const team = {}; REP_PEOPLE.forEach((p) => Object.keys(by[p].to).forEach((k) => by[p].to[k].forEach((id) => (team[k] = team[k] || new Set()).add(id))));
+    h += '<div class="rcard rteam"><div class="rtop"><span class="rname">' + L("כל הצוות", "The whole team") + '</span><span class="rnum">' + total.size + '<small>' + (total.size === 1 ? L("ליד", "lead") : L("לידים", "leads")) + '</small></span></div>' + stGrid(team) + '</div>';
     h += REP_PEOPLE.map((p) => {
       const x = by[p], n = x.leads.size, list = [...x.leads.entries()].sort((a, b) => b[1].at - a[1].at);
-      const bits = [[x.notes, L("הערה", "note"), L("הערות", "notes")], [x.st, L("שינוי סטטוס", "status change"), L("שינויי סטטוס", "status changes")], [x.calls, L("שיחה נקבעה", "call scheduled"), L("שיחות נקבעו", "calls scheduled")], [x.won, L("נרשם/ה", "won"), L("נרשמו", "won")], [x.lost, L("לא רלוונטי", "lost"), L("לא רלוונטיים", "lost")]].filter((b) => b[0]).map((b) => b[0] + " " + (b[0] === 1 ? b[1] : b[2])).join(" · ");
+      const bits = [[x.notes, L("הערה", "note"), L("הערות", "notes")], [x.calls, L("שיחה נקבעה", "call scheduled"), L("שיחות נקבעו", "calls scheduled")]].filter((b) => b[0]).map((b) => b[0] + " " + (b[0] === 1 ? b[1] : b[2])).join(" · ");
       return '<div class="rcard' + (n ? "" : " zero") + '"><div class="rtop"><span class="rname">' + esc(L(REP_HE[p], p)) + '</span><span class="rnum">' + n + '<small>' + (n === 1 ? L("ליד", "lead") : L("לידים", "leads")) + '</small></span></div>' +
-        (bits ? '<div class="rbits">' + esc(bits) + '</div>' : '<div class="rbits">' + L("לא טיפל/ה בלידים בתקופה הזו.", "No leads worked on in this period.") + '</div>') +
+        (n ? stGrid(x.to) : "") + (n ? (bits ? '<div class="rbits">' + esc(bits) + '</div>' : "") : '<div class="rbits">' + L("לא טיפל/ה בלידים בתקופה הזו.", "No leads worked on in this period.") + '</div>') +
         (n ? '<button type="button" class="rmore" data-who="' + p + '">' + (R.open[p] ? L("הסתרת הלידים", "Hide the leads") : L("הצגת הלידים", "Show the leads")) + '</button>' : "") +
         (n && R.open[p] ? '<div class="rlist">' + list.map(([id, v]) => {
           const l = S.leads.get(id);
@@ -911,7 +919,7 @@ function renderReport() {
         }).join("") + '</div>' : "") + '</div>';
     }).join("");
     const oth = Object.keys(other).map((k) => k + " " + other[k]).join(" · ");
-    h += '<p class="rnote">' + L("סופר כל הערה, שינוי סטטוס ושיחה של כל אחד, בכלי וגם ישירות ב-monday. ליד נספר פעם אחת לכל אדם בתקופה. Claude ואוטומציות לא נספרים לאף אחד", "Counts every note, status change and call each person made, here and directly in monday. A lead counts once per person in the period. Claude and automations aren't counted for anyone") +
+    h += '<p class="rnote">' + L("סופר כל הערה, שינוי סטטוס ושיחה של כל אחד, בכלי וגם ישירות ב-monday. ליד נספר פעם אחת לכל אדם בתקופה, ופעם אחת לכל סטטוס שאליו הועבר. Claude ואוטומציות לא נספרים לאף אחד", "Counts every note, status change and call each person made, here and directly in monday. A lead counts once per person in the period, and once per status it was moved to. Claude and automations aren't counted for anyone") +
       (oth ? " (" + L("בתקופה הזו: ", "this period: ") + esc(oth) + ")" : "") + ". " + L("הדוח סופר מ-1.11.2026. שעון ישראל.", "The report counts from 1 Nov 2026. Israel time.") + '</p>';
   }
   $("repBody").innerHTML = h;
