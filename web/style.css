@@ -324,3 +324,7 @@ button{cursor:pointer}
 .rlost.bad b{color:var(--hot)}
 .rlost .rlist{margin-top:6px}
 .rrow > .rsub{font-weight:900;color:var(--fg);font-size:16px;margin-top:6px}
+.pend{background:#FFF6D6;border:2px solid var(--c-talk);border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.pend b{font-size:22px;font-weight:900}
+.pend span{color:var(--muted);font-size:15px}
+.pend .two .big{min-height:56px}

@@ -164,7 +164,7 @@ function rowHtml(l, callRow) {
   return '<div class="row' + cls + (f.top && w && !k && !callRow ? " hot" : "") + (f.done ? " done" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
     '<button type="button" class="open" data-act="open"><span class="av st-' + s.c + '">' + esc((l.name || "?").trim().charAt(0).toUpperCase()) + '</span>' +
     '<span class="txt"><b>' + esc(l.name) + '</b><small>' + esc(line) + '</small>' + (st ? '<small class="stamp">' + esc(st) + '</small>' : "") + '</span></button>' +
-    (e && !k ? '<a class="ring" data-act="call" href="tel:' + esc(e) + '" aria-label="' + L("להתקשר", "Call") + '">' + PHONE + '</a>' : '<span class="ring off" aria-hidden="true">' + PHONE + '</span>') + '</div>';
+    (e && !k ? '<a class="ring" data-act="call" data-tap="call" href="tel:' + esc(e) + '" aria-label="' + L("להתקשר", "Call") + '">' + PHONE + '</a>' : '<span class="ring off" aria-hidden="true">' + PHONE + '</span>') + '</div>';
 }
 function render() {
   $("app").dir = S.lang === "he" ? "rtl" : "ltr";
@@ -253,8 +253,9 @@ function renderLead(id, fresh) {
     '<h2 class="name">' + esc(l.name) + '</h2>' +
     (l.interest ? '<div class="about">' + esc(l.interest) + '</div>' : "") +
     (w ? '<div class="flag">' + esc(w) + '</div>' : "") +
-    (e ? '<a class="giant" href="tel:' + esc(e) + '">' + PHONE + '<span>' + L("להתקשר", "Call") + '<small>' + esc(telShow(e)) + '</small></span></a>' : '<div class="giant off">' + L("אין מספר טלפון", "No phone number") + '</div>') +
-    (e ? '<div class="two"><a class="soft" target="_blank" rel="noopener" href="https://wa.me/' + esc(e.slice(1)) + '">WhatsApp</a><button type="button" class="soft" data-act="copy" data-v="' + esc(telShow(e)) + '">' + L("העתקת מספר", "Copy number") + '</button></div>' : "") +
+    pendBox(id) +
+    (e ? '<a class="giant" data-tap="call" href="tel:' + esc(e) + '">' + PHONE + '<span>' + L("להתקשר", "Call") + '<small>' + esc(telShow(e)) + '</small></span></a>' : '<div class="giant off">' + L("אין מספר טלפון", "No phone number") + '</div>') +
+    (e ? '<div class="two"><a class="soft" data-tap="whatsapp" target="_blank" rel="noopener" href="https://wa.me/' + esc(e.slice(1)) + '">WhatsApp</a><button type="button" class="soft" data-act="copy" data-tap="copy" data-v="' + esc(telShow(e)) + '">' + L("העתקת מספר", "Copy number") + '</button></div>' : "") +
     callBlock(l) +
     (l.changedBy ? '<div class="stampbig">' + esc(stampText(l)) + '</div>' : "") +
     (l.last && l.last.t ? '<div class="lastn">' + esc(l.last.t) + '<small>' + esc(l.last.by || "") + ' · ' + esc(when(l.last.at)) + '</small></div>' : "") +
@@ -273,7 +274,8 @@ function renderLead(id, fresh) {
   renderHist();
 }
 function closeLead() {
-  const id = S.open; S.open = null; S.openCopy = null; clearInterval(S.hb); release(id);
+  const id = S.open;
+  if (S.pend && S.pend.id === id) { toast(L("לא נרשם מה קרה בשיחה. בדוח זה יופיע כ״התקשר/ה, בלי תוצאה״.", "You didn't log how the call went. The report shows it as \u201cCalled, no outcome\u201d."), true); clearPend(id); } S.open = null; S.openCopy = null; clearInterval(S.hb); release(id);
   try { localStorage.removeItem("mwpl.open"); } catch (_) {}
   $("lead").hidden = true;
   if (!$("report").hidden) { renderReport(); return; } // opened from the report: back to it
@@ -538,7 +540,7 @@ function callBlock(l) {
     '<div class="cc-h">' + L("להזמין את הלקוח/ה", "Invite the client") + '</div>' +
     '<div class="cc-main">' +
       '<a class="cc-btn" target="_blank" rel="noopener" href="' + esc(gcalLink(l, lang, false)) + '">' + ICAL + '<span>' + (hasMail ? L("הזמנה ביומן", "Calendar invite") : L("להוסיף ליומן", "Add to calendar")) + '</span></a>' +
-      (wa ? '<a class="cc-btn" target="_blank" rel="noopener" href="https://wa.me/' + esc(wa.slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + IWA + '<span>WhatsApp</span></a>' : '') +
+      (wa ? '<a class="cc-btn" data-tap="whatsapp" target="_blank" rel="noopener" href="https://wa.me/' + esc(wa.slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + IWA + '<span>WhatsApp</span></a>' : '') +
     '</div>' +
     (hasMail ? '' : '<div class="cc-note">' + L("אין מייל לליד הזה, אז ההזמנה ביומן נשמרת רק אצלך.", "No email for this lead, so the calendar event is only for you.") + '</div>') +
     '<button type="button" class="cc-prev" data-act="preview">' + ICP + L("תצוגה מקדימה והעתקה של ההודעות", "Preview and copy the messages") + '</button>' +
@@ -555,7 +557,7 @@ function previewDialog() {
   $("pvWaH").textContent = "WhatsApp";
   $("pvWa").textContent = waText(l, lang); $("pvWa").dir = lang === "he" ? "rtl" : "ltr";
   $("pvWaBtns").innerHTML = '<button type="button" class="soft" data-act="copywa">' + L("העתקה", "Copy") + '</button>' +
-    (wa ? '<a class="soft" target="_blank" rel="noopener" href="https://wa.me/' + esc(wa.slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + L("פתיחה בוואטסאפ", "Open in WhatsApp") + '</a>' : '');
+    (wa ? '<a class="soft" data-tap="whatsapp" target="_blank" rel="noopener" href="https://wa.me/' + esc(wa.slice(1)) + '?text=' + encodeURIComponent(waText(l, lang)) + '">' + L("פתיחה בוואטסאפ", "Open in WhatsApp") + '</a>' : '');
   $("pvMailH").textContent = L("מייל", "Email");
   $("pvSubj").textContent = L("נושא: ", "Subject: ") + mailSubject(l, lang);
   $("pvMail").innerHTML = mailHtml(l, lang);
@@ -594,7 +596,7 @@ $("cdSave").addEventListener("click", async () => {
   $("cdSave").disabled = true;
   try {
     const j = await fn("act", { id, schedule: { date, time, note: $("cdNote").value } });
-    const nl = fromRow(Object.assign(toRow(l), j.fields || {})); S.openCopy = nl; patch(id, nl);
+    const nl = fromRow(Object.assign(toRow(l), j.fields || {})); S.openCopy = nl; patch(id, nl); clearPend(id);
     $("callDlg").hidden = true; toast(L("השיחה נקבעה", "Call scheduled")); renderLead(id, false); loadHist(id);
   } catch (e) { m.hidden = false; m.textContent = e && e.code === "bad_time" ? L("המועד לא תקין.", "That date or time doesn't look right.") : errText(e); }
   $("cdSave").disabled = false;
@@ -603,7 +605,7 @@ async function callDone() {
   const id = S.open, l = S.leads.get(id) || S.openCopy; if (!l) return;
   try {
     const j = await fn("act", { id, callDone: true });
-    const nl = fromRow(Object.assign(toRow(l), j.fields || {})); S.openCopy = nl; patch(id, nl);
+    const nl = fromRow(Object.assign(toRow(l), j.fields || {})); S.openCopy = nl; patch(id, nl); clearPend(id);
     toast(L("סומן: השיחה התקיימה", "Marked: call done")); renderLead(id, false); loadHist(id);
   } catch (e) { toast(errText(e), true); }
 }
@@ -664,7 +666,7 @@ async function finish(label, noAnswer, reason) {
     const j = await fn("act", { id, label, noAnswer, reason, note: text });
     try { localStorage.removeItem("mwpl.draft." + id); } catch (_) {}
     const nl = fromRow(Object.assign(toRow(l), j.fields || {}));
-    S.openCopy = nl; patch(id, nl);
+    S.openCopy = nl; patch(id, nl); clearPend(id);
     toast(label ? L("נשמר: ", "Saved: ") + word(label) : L("נשמר", "Saved"));
     renderLead(id, false);
   } catch (e) { toast(e && e.code === "locked" ? (e.by || "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now") : errText(e), true); bs.forEach((b) => { b.disabled = false; }); }
@@ -689,6 +691,33 @@ async function sync(manual) {
   S.syncing = false; setSync(); draw();
 }
 
+/* ---------- every way to reach a lead is recorded: Call, WhatsApp, Copy number (Jeinna with Matan's OK, 11 Nov 2026) ----------
+   The tap is saved quietly. Back on the lead, it asks "How did it go?" until something is logged
+   (No answer, a status, a note, a call scheduled). Not logged = "Called, no outcome" in the report. */
+try { S.pend = JSON.parse(localStorage.getItem("mwpl.pend") || "null"); } catch (_) { S.pend = null; }
+function logTap(id, kind) {
+  if (!id || !S.me) return;
+  const at = Date.now();
+  S.pend = { id, kind, at }; try { localStorage.setItem("mwpl.pend", JSON.stringify(S.pend)); } catch (_) {}
+  if (S.open === id) { S.hist.unshift({ id: "tap-local-" + at, lead_id: id, kind: "tap", text: kind, by: S.me.name, at, source: "app" }); }
+  fn("act", { id, tap: kind }).catch(() => {}); // never in the way of the call itself
+}
+function clearPend(id) { if (S.pend && S.pend.id === id) { S.pend = null; try { localStorage.removeItem("mwpl.pend"); } catch (_) {} } }
+function pendBox(id) {
+  const p = S.pend; if (!p || p.id !== id) return "";
+  const what = p.kind === "whatsapp" ? L("שלחת וואטסאפ", "You opened WhatsApp") : p.kind === "copy" ? L("העתקת את המספר", "You copied the number") : L("התקשרת", "You called");
+  return '<div class="pend"><b>' + L("איך היה?", "How did it go?") + '</b><span>' + what + ' · ' + esc(when(p.at)) + '</span>' +
+    '<div class="two"><button type="button" class="big wide st-na" data-na="1">' + L("לא ענה/תה", "No answer") + '</button>' +
+    '<button type="button" class="soft" data-act="pendnote">' + L("לכתוב מה קרה", "Write what happened") + '</button>' +
+    '<button type="button" class="soft" data-act="pendmore">' + L("לשנות סטטוס", "Change the status") + '</button></div></div>';
+}
+document.addEventListener("click", (ev) => {
+  const t = ev.target.closest("[data-tap]"); if (!t) return;
+  const row = t.closest(".row"); logTap(row ? row.dataset.id : S.open, t.dataset.tap);
+  if (S.open && !row) renderLead(S.open, false);
+}, true);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && S.open && S.pend && S.pend.id === S.open) renderLead(S.open, false); });
+
 /* ---------- events ---------- */
 $("list").addEventListener("click", (ev) => {
   const row = ev.target.closest(".row"), t = ev.target.closest("[data-act]"); if (!row || !t) return;
@@ -709,6 +738,8 @@ $("leadBody").addEventListener("click", (ev) => {
   if (t.dataset.st) { finish(t.dataset.st, false); return; }
   if (t.dataset.na) { finish(null, true); return; }
   if (t.dataset.act === "back") { closeLead(); return; }
+  if (t.dataset.act === "pendnote") { const nb = $("noteBox"); nb.focus(); nb.scrollIntoView({ block: "center", behavior: "smooth" }); return; }
+  if (t.dataset.act === "pendmore") { $("answers").scrollIntoView({ block: "center", behavior: "smooth" }); return; }
   if (t.dataset.act === "delete") { askDelete(); return; }
   if (t.dataset.act === "schedule") { scheduleDialog(); return; }
   if (t.dataset.act === "calldone") { callDone(); return; }
@@ -854,7 +885,7 @@ async function loadReport() {
   let out = [], o = 0;
   for (;;) { // 3 minutes either side, to see the Claude note that goes with a status change
     const { data, error } = await sb.from("lead_updates").select("id,lead_id,kind,text,by,at,bot,source")
-      .gte("at", t0 - 180000).lt("at", t1 + 180000).order("at", { ascending: true }).range(o, o + 999);
+      .gte("at", t0 - 180000).lt("at", t1 + 3 * 36e5).order("at", { ascending: true }).range(o, o + 999);
     if (R.key !== key) return;
     if (error) { R.busy = false; R.err = true; renderReport(); return; }
     out = out.concat(data || []); if (!data || data.length < 1000) break; o += 1000;
@@ -884,7 +915,7 @@ function isTry(x, hist) {
 }
 function repCount() {
   const by = {}, other = {}, seen = {}, lead = {};
-  REP_PEOPLE.forEach((p) => { by[p] = { leads: new Map(), notes: 0, calls: 0, sched: 0, fwd: new Map(), lostOk: 0, lostBad: [], clean: [], ch: [] }; });
+  REP_PEOPLE.forEach((p) => { by[p] = { leads: new Map(), notes: 0, calls: 0, logged: 0, taps: [], sched: 0, fwd: new Map(), lostOk: 0, lostBad: [], clean: [], ch: [] }; });
   (R.rows || []).forEach((h) => { (lead[h.lead_id] = lead[h.lead_id] || []).push(h); });
   (R.rows || []).forEach((h) => {
     const at = +h.at; if (at < R.t0 || at >= R.t1) return;
@@ -896,15 +927,22 @@ function repCount() {
       const k = h.lead_id + "|" + who + "|" + to;
       if (seen[k] && Math.abs(seen[k] - at) < 300000) return; seen[k] = at;
       p.ch.push({ id: h.lead_id, at, to, base: to.replace(/\s*\(.*\)$/, ""), src: h.source });
-    } else if (h.kind === "tap") p.calls++;
-    else if (h.kind === "call") { if (h.text !== "done") p.sched++; }
-    else { p.notes++; if (NA_RE.test(unsignNote(h.text))) p.calls++; }
+    } else if (h.kind === "tap") { p.calls++; p.taps.push({ id: h.lead_id, at, kind: h.text }); }
+    else if (h.kind === "call") { if (h.text !== "done") p.sched++; else p.logged++; }
+    else { p.notes++; p.logged++; if (NA_RE.test(unsignNote(h.text))) p.calls++; }
     const was = p.leads.get(h.lead_id);
     if (!was || was.at <= at) p.leads.set(h.lead_id, { at, kind: h.kind, text: h.kind === "status" ? to : h.kind === "call" ? h.text : h.kind === "tap" ? h.text : String(h.text || ""), n: (was ? was.n : 0) + 1 });
     else was.n++;
   });
   REP_PEOPLE.forEach((who) => {
     const p = by[who];
+    // a tap with nothing logged by the same person on that lead within 3 hours: "Called, no outcome"
+    p.noOut = []; const tapSeen = new Set();
+    p.taps.forEach((e) => {
+      if (tapSeen.has(e.id + "|" + Math.floor(e.at / 108e5))) return; tapSeen.add(e.id + "|" + Math.floor(e.at / 108e5));
+      const ok = (lead[e.id] || []).some((x) => x.kind !== "tap" && +x.at >= e.at && +x.at <= e.at + 108e5 && histWho(x, lead[e.id]) === who);
+      if (!ok) p.noOut.push(e);
+    });
     p.ch.forEach((e) => {
       e.bulk = p.ch.filter((o) => o.base === e.base && Math.abs(o.at - e.at) <= 6e5).length >= 5;
       if (e.bulk) { p.clean.push(e); return; }
@@ -923,7 +961,7 @@ function repCount() {
 function repWhat(x) {
   if (x.kind === "status") { const m = /^([^(]+?)\s*(\((.+)\))?$/.exec(x.text) || []; const s = STM[(m[1] || "").trim()]; return L("סטטוס ← ", "Status → ") + (s ? L(s.he, s.en) : x.text) + (m[3] ? " (" + m[3] + ")" : ""); }
   if (x.kind === "call") return x.text === "done" ? L("השיחה התקיימה", "Call done") : L("שיחה נקבעה: ", "Call scheduled: ") + x.text;
-  if (x.kind === "tap") return x.text === "whatsapp" ? L("וואטסאפ", "WhatsApp") : L("התקשר/ה", "Called");
+  if (x.kind === "tap") return x.text === "whatsapp" ? L("פתח/ה וואטסאפ", "Opened WhatsApp") : x.text === "copy" ? L("העתיק/ה את המספר", "Copied the number") : L("לחץ/ה להתקשר", "Tapped Call");
   const t = unsignNote(x.text); return t.length > 70 ? t.slice(0, 70) + "…" : t;
 }
 // the note text without its "— Name · date" signature
@@ -961,20 +999,24 @@ function renderReport() {
   else if (!R.rows) h += '<div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   else {
     const { by, other } = repCount();
-    const ranked = REP_PEOPLE.slice().sort((a, b) => by[b].fwd.size - by[a].fwd.size || by[b].calls - by[a].calls || by[a].lostBad.length - by[b].lostBad.length);
+    const flags = (p) => by[p].lostBad.length + by[p].noOut.length;
+    const ranked = REP_PEOPLE.slice().sort((a, b) => by[b].fwd.size - by[a].fwd.size || by[b].logged - by[a].logged || flags(a) - flags(b));
     let rank = 0, prev = "";
     h += '<div class="rlegend"><span>' + L("שיחות", "Calls made") + '</span><span>' + L("התקדמו", "Moved forward") + '</span><span>' + L("לא רלוונטי בלי ניסיון", "Lost without trying") + '</span></div>';
     h += ranked.map((p, i) => {
-      const x = by[p], n = x.leads.size, key = x.fwd.size + "|" + x.calls, bad = x.lostBad.length;
+      const x = by[p], n = x.leads.size, key = x.fwd.size + "|" + x.logged, bad = x.lostBad.length + x.noOut.length;
       if (key !== prev) { rank = i + 1; prev = key; }
-      const medal = x.fwd.size || x.calls ? (["🥇", "🥈", "🥉"][rank - 1] || rank) : "–";
+      const medal = x.fwd.size || x.logged ? (["🥇", "🥈", "🥉"][rank - 1] || rank) : "–";
       let body = "";
       if (R.open[p] && n) {
         const won = [...x.fwd.values()].filter((e) => e.base === "Won").length;
         const fw = {}; x.fwd.forEach((e) => { (fw[e.base] = fw[e.base] || new Set()).add(e.id); });
         body += '<div class="rsub">' + L("התקדמו", "Moved forward") + '</div>' + (x.fwd.size ? stGrid(fw) : '<div class="rbits">' + L("אף ליד לא התקדם בתקופה הזו.", "No leads moved forward in this period.") + '</div>');
-        body += '<div class="rbits">' + [[x.notes, L("הערה", "note"), L("הערות", "notes")], [x.sched, L("שיחה נקבעה", "call scheduled"), L("שיחות נקבעו", "calls scheduled")], [x.lostOk, L("לא רלוונטי כמו שצריך", "Lost done right"), L("לא רלוונטי כמו שצריך", "Lost done right")]].filter((b) => b[0]).map((b) => b[0] + " " + (b[0] === 1 ? b[1] : b[2])).join(" · ") + '</div>';
-        if (bad) body += '<div class="rlost bad"><b>⚠ ' + L("לא רלוונטי בלי ניסיון: ", "Lost without trying: ") + bad + '</b>' +
+        body += '<div class="rbits">' + [[x.calls, L("ניסיון קשר", "call or message"), L("ניסיונות קשר (להתקשר, וואטסאפ, העתקה, לא ענה)", "calls and messages (Call, WhatsApp, Copy, No answer)")], [x.notes, L("הערה", "note"), L("הערות", "notes")], [x.sched, L("שיחה נקבעה", "call scheduled"), L("שיחות נקבעו", "calls scheduled")], [x.lostOk, L("לא רלוונטי כמו שצריך", "Lost done right"), L("לא רלוונטי כמו שצריך", "Lost done right")]].filter((b) => b[0]).map((b) => b[0] + " " + (b[0] === 1 ? b[1] : b[2])).join(" · ") + '</div>';
+        if (x.noOut.length) body += '<div class="rlost bad"><b>⚠ ' + L("התקשר/ה, בלי תוצאה: ", "Called, no outcome: ") + x.noOut.length + '</b>' +
+          '<span>' + L("נלחץ להתקשר / וואטסאפ / העתקה, ולא נרשם מה קרה תוך 3 שעות", "Tapped Call, WhatsApp or Copy, and nothing was logged within 3 hours") + '</span>' +
+          '<div class="rlist">' + x.noOut.slice().sort((a, b) => b.at - a.at).map((e) => '<div class="ritem">' + leadLink(e.id) + '<small>' + esc(when(e.at)) + ' · ' + esc(repWhat({ kind: "tap", text: e.kind })) + '</small></div>').join("") + '</div></div>';
+        if (x.lostBad.length) body += '<div class="rlost bad"><b>⚠ ' + L("לא רלוונטי בלי ניסיון: ", "Lost without trying: ") + x.lostBad.length + '</b>' +
           '<span>' + L("תקין: 3 פעמים לא ענה, או סיבה + לפחות ניסיון אחד לפני", "OK: 3 No answers, or a reason plus at least one try before it") + '</span>' +
           '<div class="rlist">' + x.lostBad.sort((a, b) => b.at - a.at).map((e) => '<div class="ritem">' + leadLink(e.id) + '<small>' + esc(when(e.at)) + ' · ' +
             (e.why === "notry" ? L("אף אחד לא התקשר לפני", "nobody called before") : L("בלי סיבה", "no reason")) + (e.monday ? L(" · שונה ישירות ב-monday", " · changed in monday") : "") + '</small></div>').join("") + '</div></div>';
@@ -988,12 +1030,12 @@ function renderReport() {
       }
       return '<div class="rcard rrow' + (n ? "" : " zero") + (R.open[p] ? " open" : "") + '"><button type="button" class="rhead" data-who="' + p + '"' + (n ? "" : " disabled") + '>' +
         '<span class="rmed">' + medal + '</span><span class="rname">' + esc(L(REP_HE[p], p)) + '</span><span class="rchev">' + (n ? (R.open[p] ? "▴" : "▾") : "") + '</span></button>' +
-        '<div class="r3"><span><b>' + x.calls + '</b>' + L("שיחות", "calls made") + '</span><span class="good"><b>' + x.fwd.size + '</b>' + L("התקדמו", "moved forward") + '</span><span class="' + (bad ? "bad" : "") + '"><b>' + bad + '</b>' + L("לא רלוונטי בלי ניסיון", "Lost without trying") + '</span></div>' +
+        '<div class="r3"><span><b>' + x.logged + '</b>' + L("קשר שנרשם", "contacts logged") + '</span><span class="good"><b>' + x.fwd.size + '</b>' + L("התקדמו", "moved forward") + '</span><span class="' + (bad ? "bad" : "") + '"><b>' + bad + '</b>' + L("דגלים אדומים", "red flags") + '</span></div>' +
         (x.clean.length ? '<div class="rclean">' + L("ניקוי: ", "Cleanup: ") + new Set(x.clean.map((e) => e.id)).size + L(" לידים, לא נספרים", " leads, not counted") + '</div>' : "") + body + '</div>';
     }).join("");
     const oth = Object.keys(other).map((k) => k + " " + other[k]).join(" · ");
-    h += '<p class="rnote">' + L("הדירוג לפי לידים שהתקדמו, ואז לפי שיחות. שיחות = לחיצות על להתקשר / וואטסאפ בכלי ולחיצות על לא ענה. ניקוי = 5 שינויים או יותר לאותו סטטוס תוך 10 דקות, מוצג בנפרד ולא נספר. Claude ואוטומציות לא נספרים לאף אחד",
-      "Ranked by leads moved forward, then by calls. Calls = Call / WhatsApp taps in MWP Leads and No answer presses. Cleanup = 5 or more changes to the same status within 10 minutes, shown apart and not counted. Claude and automations aren't counted for anyone") +
+    h += '<p class="rnote">' + L("הדירוג לפי לידים שהתקדמו, ואז לפי קשר שנרשם (הערות, לא ענה, שיחות שהתקיימו). דגלים אדומים = לא רלוונטי בלי ניסיון (תקין: 3 פעמים לא ענה, או סיבה + ניסיון לפני) והתקשר/ה בלי תוצאה. מה שלא נרשם בכלי לא קרה. ניקוי = 5 שינויים או יותר לאותו סטטוס תוך 10 דקות, מוצג בנפרד ולא נספר. Claude ואוטומציות לא נספרים לאף אחד",
+      "Ranked by leads moved forward, then by contacts logged (notes, No answer, calls done). Red flags = Lost without trying (OK: 3 No answers, or a reason plus a try before it) and Called, no outcome. Not logged in MWP Leads = didn't happen. Cleanup = 5 or more changes to the same status within 10 minutes, shown apart and not counted. Claude and automations aren't counted for anyone") +
       (oth ? " (" + L("בתקופה הזו: ", "this period: ") + esc(oth) + ")" : "") + ". " + L("הדוח סופר מ-1.11.2026. שעון ישראל.", "The report counts from 1 Nov 2026. Israel time.") + '</p>';
   }
   $("repBody").innerHTML = h;

@@ -56,6 +56,7 @@
         { id: "t1", lead_id: "2", kind: "tap", text: "call", by: "Emilia", at: now - 25 * M, source: "app", bot: false },
         { id: "t2", lead_id: "4", kind: "tap", text: "call", by: "Emilia", at: now - 24 * M, source: "app", bot: false },
         { id: "t3", lead_id: "7", kind: "tap", text: "whatsapp", by: "Emilia", at: now - 23 * M, source: "app", bot: false },
+        { id: "t5", lead_id: "5", kind: "tap", text: "copy", by: "Matan", at: now - 45 * M, source: "app", bot: false },
         { id: "t4", lead_id: "1", kind: "tap", text: "call", by: "Matan", at: now - 31 * M, source: "app", bot: false },
         { id: "n5", lead_id: "9", kind: "note", text: "No answer", by: "Eliran", at: now - 12 * M, source: "app", bot: false },
         { id: "q1", lead_id: "4", kind: "status", text: "In conversation → Qualified", by: "Emilia", at: now - 22 * M, source: "app", bot: false },
@@ -91,6 +92,7 @@
       if (name === "sync") return window.__noToken ? new Response(JSON.stringify({ ok: false, code: "no_token" }), { status: 503 }) : ok({ ok: true, at: Date.now() });
       if (name === "act" && body.schedule) { const [y, m, d] = body.schedule.date.split("-").map(Number), [h, mi] = body.schedule.time.split(":").map(Number); const at = Date.UTC(y, m - 1, d, h - 2, mi); return ok({ ok: true, fields: { fu_at: at, fu_date: body.schedule.date, fu_state: "Follow-Up", changed_by: "Jeinna", changed_at: Date.now(), changed_what: "Call → " + body.schedule.date + " " + body.schedule.time } }); }
       if (name === "act" && body.callDone) return ok({ ok: true, fields: { fu_state: "Done", changed_by: "Jeinna", changed_at: Date.now(), changed_what: "Call done" } });
+      if (name === "act" && body.tap) return ok({ ok: true });
       if (name === "act" && body.delete) return window.__failDelete ? new Response(JSON.stringify({ ok: false, code: "tool_error", message: "test" }), { status: 502 }) : ok({ ok: true, deleted: true });
       if (name === "act") {
         const f = { touch: Date.now() };
