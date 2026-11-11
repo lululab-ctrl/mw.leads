@@ -104,7 +104,7 @@ function release(id) { if (id) sb.rpc("release_lead", { p_id: id }).then(() => {
 const NOT_PEOPLE = ["Claude", "Automation", "monday automation", "Flow Admin", ""];
 function isPerson(by) { return NOT_PEOPLE.indexOf(String(by || "")) < 0; }
 const CLAUDE_RE = /\(\d{1,2}\.\d{1,2}(\.\d{2,4})?, ?Claude/;
-const AUTO_TXT = /^(נשלח אוטומטית|הליד לחץ|הליד חזר|התעניינות קודמת)/;
+const AUTO_TXT = /^(נשלח אוטומטית|הליד לחץ|הליד חזר|התעניינות קודמת|הליד ביקש בטופס)/;
 function histWho(h, all) {
   const t = String(h.text || "");
   if (h.bot || h.by === "Flow Admin" || h.by === "monday automation" || AUTO_TXT.test(t)) return L("אוטומציה", "Automation");
@@ -114,7 +114,7 @@ function histWho(h, all) {
 }
 function facts(l) {
   /* Order: 1 asked us to call (Meta form in the past week, or the email button), 2 came back again, 3 new by date (past week, never contacted), 4 follow-up due. Old = New Lead for over two weeks. */
-  const now = Date.now(), t0 = dayStart(), noteAt = (l.last && isPerson(l.last.by) && l.last.at) || 0, W = 7 * 864e5; // a note by Claude or an automation isn't contact
+  const now = Date.now(), t0 = dayStart(), noteAt = (l.last && isPerson(l.last.by) && !AUTO_TXT.test(l.last.t || "") && l.last.at) || 0, W = 7 * 864e5; // a note by Claude or an automation isn't contact
   // a status change by a person handles the lead too, not only a note (Jeinna, 11 Nov 2026): it leaves
   // Call first and comes back only if the lead does something new. Claude and automations don't count.
   const stBy = /^Status/.test(l.changedWhat || "") && isPerson(l.changedBy) ? (l.changedAt || 0) : 0;
@@ -610,7 +610,10 @@ async function callDone() {
   } catch (e) { toast(errText(e), true); }
 }
 // any follow-up date in monday counts, with or without a time; Done and Lost don't
-function isCall(l) { return !!l.fuAt && l.fuState !== "Done" && l.fuState !== "Lost"; }
+// the follow-up date the automation sets (no time) on the day a lead comes in isn't a booked call:
+// that lead belongs in Call first (Jeinna, 12 Nov 2026)
+function autoFu(l) { return !l.fuHasTime && !!l.created && iso(l.fuAt) === iso(l.created); }
+function isCall(l) { return !!l.fuAt && l.fuState !== "Done" && l.fuState !== "Lost" && !autoFu(l); }
 
 /* ---------- delete a lead (here and in monday), after "Are you sure?" ---------- */
 const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';

@@ -23,6 +23,9 @@ export const META_RE = /ביקש\/?ה? שנחזור בטלפון|בטלפון\?:
 export const NA_RE = /^(no answer|לא ענ)/i;
 export const RET_RE = /^הליד חזר|התעניינות קודמת|lead returned/i;
 export const AUTO_RE = /^נשלח אוטומטית/;
+// the note an automation writes (under Matan's monday account) when a Meta lead asks to be called:
+// it's the call request itself, not someone handling the lead (Jeinna, 12 Nov 2026)
+export const ASK_RE = /^הליד ביקש בטופס/;
 // Notes posted from this app end with "— Name · 10.11.2026 14:32" (one monday token posts them all)
 export const SIGN_RE = /\n?\s*— ([^\n—·]{1,40}?)\s*(?:·[^\n—]{0,40})?\s*$/;
 // the note without its signature
@@ -99,6 +102,7 @@ export function signals(updates, authors) {
     const at = Date.parse(u.created_at) || 0;
     const bot = String((u.creator && u.creator.id) || "") === BOT;
     if (AUTO_RE.test(t)) continue;
+    if (ASK_RE.test(t)) { s.m = Math.max(s.m, at); continue; }
     const isCb = bot && CB_RE.test(t);
     if (isCb) s.cb = Math.max(s.cb, at);
     if (bot && META_RE.test(t)) s.m = Math.max(s.m, at);
@@ -119,7 +123,7 @@ export function merge(d, prev, s) {
   d.mcb = Math.max(prev.mcb || 0, s.m || 0, META_RE.test(d.about) ? d.created : 0);
   d.na = Math.max(prev.na || 0, s.na || 0);
   d.ret = Math.max(prev.ret || 0, s.ret || 0);
-  const pl = prev.last_at ? { t: prev.last_t, at: prev.last_at, by: prev.last_by } : null;
+  const pl = prev.last_at && !ASK_RE.test(String(prev.last_t || "")) ? { t: prev.last_t, at: prev.last_at, by: prev.last_by } : null;
   const last = (s.last && (!pl || s.last.at >= (pl.at || 0) - 5000)) ? s.last : pl;
   d.last_t = last ? last.t : null; d.last_at = last ? last.at : 0; d.last_by = last ? (last.by || "") : "";
   d.st_at = prev.st_at || 0;
@@ -185,7 +189,7 @@ export function stamp(prev, s, logs) {
 export const CLAUDE_RE = /\(\d{1,2}\.\d{1,2}(\.\d{2,4})?, ?Claude/;
 export function histWho(r) {
   const t = String(r.text || "");
-  if (r.bot || r.by === "Flow Admin" || r.by === "monday automation" || AUTO_RE.test(t) || CB_RE.test(t) || RET_RE.test(t)) return "Automation";
+  if (r.bot || r.by === "Flow Admin" || r.by === "monday automation" || AUTO_RE.test(t) || ASK_RE.test(t) || CB_RE.test(t) || RET_RE.test(t)) return "Automation";
   if (CLAUDE_RE.test(t)) return "Claude";
   return r.by || "—";
 }
