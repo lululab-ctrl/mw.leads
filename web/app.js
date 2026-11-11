@@ -806,11 +806,11 @@ function errText(e) {
 
 /* ---------- Report: how many leads each person worked on (Jeinna, 11 Nov 2026) ----------
    Counts every note, status change and call each person made, in this app and directly in monday,
-   from the start of MWP Leads' record (13 Oct 2026). Claude and automations aren't counted for anyone.
+   from 1 Nov 2026 (Jeinna, 11 Nov 2026; MWP Leads' record itself starts 13 Oct 2026). Claude and automations aren't counted for anyone.
    A lead counts once per person in the period, however many things they did on it. Israel days. */
 const REP_PEOPLE = ["Jeinna", "Matan", "Eliran", "Emilia"];
 const REP_HE = { Jeinna: "ג׳ינה", Matan: "מתן", Eliran: "אלירן", Emilia: "אמיליה" };
-const REP_START = "2026-10-13";
+const REP_START = "2026-11-01"; // the report counts from 1 Nov 2026 (Jeinna, 11 Nov 2026)
 const R = { mode: "week", day: null, from: REP_START, to: null, open: {}, rows: null, key: "", busy: false };
 // Israel midnight of a calendar day "YYYY-MM-DD"
 function ilMid(ymd) { const [y, m, d] = ymd.split("-").map(Number), u = Date.UTC(y, m - 1, d); return u - ilOffset(u); }
@@ -912,7 +912,7 @@ function renderReport() {
     }).join("");
     const oth = Object.keys(other).map((k) => k + " " + other[k]).join(" · ");
     h += '<p class="rnote">' + L("סופר כל הערה, שינוי סטטוס ושיחה של כל אחד, בכלי וגם ישירות ב-monday. ליד נספר פעם אחת לכל אדם בתקופה. Claude ואוטומציות לא נספרים לאף אחד", "Counts every note, status change and call each person made, here and directly in monday. A lead counts once per person in the period. Claude and automations aren't counted for anyone") +
-      (oth ? " (" + L("בתקופה הזו: ", "this period: ") + esc(oth) + ")" : "") + ". " + L("הרישום מתחיל ב-13.10.2026. שעון ישראל.", "The record starts 13 Oct 2026. Israel time.") + '</p>';
+      (oth ? " (" + L("בתקופה הזו: ", "this period: ") + esc(oth) + ")" : "") + ". " + L("הדוח סופר מ-1.11.2026. שעון ישראל.", "The report counts from 1 Nov 2026. Israel time.") + '</p>';
   }
   $("repBody").innerHTML = h;
 }
