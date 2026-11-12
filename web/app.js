@@ -853,7 +853,7 @@ function errText(e) {
 const REP_PEOPLE = ["Jeinna", "Matan", "Eliran", "Emilia"];
 const REP_HE = { Jeinna: "ג׳ינה", Matan: "מתן", Eliran: "אלירן", Emilia: "אמיליה" };
 const REP_START = "2026-11-01"; // the report counts from 1 Nov 2026 (Jeinna, 11 Nov 2026)
-const R = { mode: "week", day: null, from: REP_START, to: null, open: {}, openLost: {}, metric: "leads", rows: null, lh: {}, key: "", busy: false };
+const R = { mode: "week", flags: "", day: null, from: REP_START, to: null, open: {}, openLost: {}, metric: "leads", rows: null, lh: {}, key: "", busy: false };
 // Israel midnight of a calendar day "YYYY-MM-DD"
 function ilMid(ymd) { const [y, m, d] = ymd.split("-").map(Number), u = Date.UTC(y, m - 1, d); return u - ilOffset(u); }
 function addDays(ymd, n) { const [y, m, d] = ymd.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); }
@@ -956,7 +956,7 @@ function repCount() {
         const tries = before.filter((x) => isTry(x, hist)).length, na = before.filter((x) => x.kind === "note" && NA_RE.test(unsignNote(x.text)) && REP_PEOPLE.indexOf(histWho(x, hist)) >= 0).length;
         const reason = /\(.+\)/.test(e.to);
         if (na >= 3 || (reason && tries >= 1)) p.lostOk++;
-        else p.lostBad.push({ id: e.id, at: e.at, why: !tries ? "notry" : "noreason", monday: e.src === "monday" });
+        else p.lostBad.push({ id: e.id, at: e.at, why: !tries ? "notry" : "noreason", na, monday: e.src === "monday" });
       }
     });
   });
@@ -996,8 +996,12 @@ function renderReport() {
     const ranked = REP_PEOPLE.slice().sort((a, b) => by[b].fwd.size - by[a].fwd.size || by[b].calls - by[a].calls || flags(a) - flags(b));
     const cols = [[L("שיחות", "Calls"), (p) => by[p].calls, ""], [L("התקדמו", "Moved forward"), (p) => by[p].fwd.size, "good"], [L("נרשמו", "Won"), won, "good"], [L("לא רלוונטי", "Lost"), lost, ""], [L("דגלים", "Red flags"), flags, "bad"]];
     h += '<div class="rtab"><table><thead><tr><th></th>' + cols.map((c) => '<th>' + c[0] + '</th>').join("") + '</tr></thead><tbody>' +
-      ranked.map((p) => '<tr><th>' + esc(L(REP_HE[p], p)) + '</th>' + cols.map((c) => { const v = c[1](p); return '<td class="' + (v ? c[2] : "zero") + '">' + v + '</td>'; }).join("") + '</tr>').join("") +
+      ranked.map((p) => '<tr><th>' + esc(L(REP_HE[p], p)) + '</th>' + cols.map((c) => { const v = c[1](p);
+        // a person's red flags number opens the list of them (Jeinna, 12 Nov 2026)
+        const cell = c[1] === flags && v ? '<button type="button" class="rflag' + (R.flags === p ? " on" : "") + '" data-flags="' + p + '" aria-expanded="' + (R.flags === p) + '">' + v + '</button>' : v;
+        return '<td class="' + (v ? c[2] : "zero") + '">' + cell + '</td>'; }).join("") + '</tr>').join("") +
       '</tbody></table></div>';
+    if (R.flags && flags(R.flags)) h += flagList(R.flags, by[R.flags]);
     // what each number means, one short line each (Jeinna, 11 Nov 2026)
     const legend = [
       [L("שיחות", "Calls"), L("לחיצות על להתקשר, וואטסאפ, העתקת מספר ולא ענה", "Taps on Call, WhatsApp, Copy number and No answer"), ""],
@@ -1013,6 +1017,21 @@ function renderReport() {
   }
   $("repBody").innerHTML = h;
 }
+// one person's red flags, newest first, each in plain words with the lead it's about
+function flagList(who, p) {
+  const tapHe = { whatsapp: "פתח/ה וואטסאפ", copy: "העתיק/ה את המספר" }, tapEn = { whatsapp: "Opened WhatsApp", copy: "Copied the number" };
+  const items = p.lostBad.map((e) => ({ id: e.id, at: e.at, t: e.why === "notry"
+      ? L("סימן/ה לא רלוונטי, אבל אף אחד לא התקשר או שלח לליד הודעה לפני כן.", "Marked Lost, but nobody had called or messaged this lead before.")
+      : L("סימן/ה לא רלוונטי בלי לבחור סיבה, ואחרי " + (e.na || 0) + " פעמים לא ענה בלבד (צריך 3).", "Marked Lost without picking a reason, after only " + (e.na || 0) + " No answer" + (e.na === 1 ? "" : "s") + " (3 are needed)."),
+      m: e.monday ? L("השינוי נעשה ב-monday", "Changed in monday") : "" }))
+    .concat(p.noOut.map((e) => ({ id: e.id, at: e.at,
+      t: L((tapHe[e.kind] || "לחץ/ה להתקשר") + ", ולא כתב/ה מה קרה בתוך 3 שעות.", (tapEn[e.kind] || "Tapped Call") + ", but didn't write what happened within 3 hours."), m: "" })))
+    .sort((a, b) => b.at - a.at);
+  return '<div class="rflags"><div class="rfh"><b>' + L("הדגלים של ", "Red flags: ") + esc(L(REP_HE[who], who)) + ' (' + items.length + ')</b>' +
+    '<button type="button" class="rfx" data-flags="' + who + '" aria-label="' + L("סגירה", "Close") + '">✕</button></div><ol>' +
+    items.map((x) => '<li>' + leadLink(x.id) + '<span class="rft">' + esc(when(x.at)) + (x.m ? " · " + x.m : "") + '</span><span class="rfw">' + x.t + '</span></li>').join("") +
+    '</ol><p>' + L("לחיצה על שם הליד פותחת אותו.", "Tap a lead's name to open it.") + '</p></div>';
+}
 // how many leads were moved to each status, in the board's order; statuses nobody moved to are left out
 function stGrid(to) {
   const c = ST.filter((x) => to[x.k] && to[x.k].size).concat(Object.keys(to).filter((k) => !STM[k]).map((k) => ({ k, c: "na", he: k, en: k }))); // e.g. Community
@@ -1026,6 +1045,7 @@ $("report").addEventListener("click", (ev) => {
   const b = ev.target.closest("button"); if (!b) return;
   if (b.dataset.r === "close") return closeReport();
   if (b.dataset.r === "retry") { R.key = ""; return loadReport(); }
+  if (b.dataset.flags) { R.flags = R.flags === b.dataset.flags ? "" : b.dataset.flags; return renderReport(); }
   if (b.dataset.mode) { R.mode = b.dataset.mode; R.day = null; R.open = {}; renderReport(); return loadReport(); }
   if (b.dataset.step) return repStep(+b.dataset.step);
   if (b.dataset.who) { R.open[b.dataset.who] = !R.open[b.dataset.who]; return renderReport(); }

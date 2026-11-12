@@ -333,6 +333,16 @@ button{cursor:pointer}
 .rtab td.zero{color:var(--line)}
 .rtab td.good{color:var(--call)}
 .rtab td.bad{color:var(--hot);background:#FBE3E7}
+.rflag{border:none;background:none;padding:2px 10px;min-width:44px;min-height:40px;border-radius:12px;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+.rflag.on{background:var(--hot);color:#fff;text-decoration:none}
+.rflags{border-radius:16px;background:var(--card);border:2px solid #FBE3E7}
+.rfh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 8px 6px;padding-inline-start:14px;color:var(--hot)}
+.rfx{border:none;background:none;font-size:18px;min-width:40px;min-height:40px;color:var(--muted);cursor:pointer}
+.rflags ol{margin:0;padding:0;list-style:none}
+.rflags li{display:flex;flex-direction:column;gap:3px;padding:11px 14px;border-top:1px solid var(--line)}
+.rft{font-size:13px;color:var(--muted)}
+.rfw{font-size:14.5px;line-height:1.4;color:var(--fg)}
+.rflags p{margin:0;padding:8px 14px 12px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
 .rleg{border-radius:16px;background:var(--card);font-size:14px;color:var(--muted)}
 .rleg summary{cursor:pointer;padding:12px 14px;font-weight:700;color:var(--fg);list-style:none}
 .rleg summary::-webkit-details-marker{display:none}
