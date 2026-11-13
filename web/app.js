@@ -679,17 +679,40 @@ async function finish(label, noAnswer, reason) {
   const id = S.open, l = S.leads.get(id) || S.openCopy; if (!l) return;
   const box = $("noteBox"), text = (box ? box.value : "").trim();
   if (!label && !noAnswer && !text) { toast(L("קודם כותבים הערה", "Write a note first"), true); return; }
-  const bs = $("leadBody").querySelectorAll("button"); bs.forEach((b) => { b.disabled = true; });
-  toast(L("שומר…", "Saving…"));
+  // The screen changes at once and monday is updated in the background (Jeinna, 13 Nov 2026: saves felt
+  // slow). If monday refuses, the lead goes back to how it was and the note is put back to try again.
+  const before = l, now = Date.now(), me = (S.me && S.me.name) || "", note = noAnswer ? "No answer" + (text ? "\n" + text : "") : text;
+  const moving = !!label && label !== l.status;
+  const guess = Object.assign({}, l, {
+    status: moving ? label : l.status, stAt: label ? now : l.stAt, na: noAnswer ? (l.na || 0) + 1 : l.na, touch: now,
+    last: note ? { t: note.slice(0, 400), at: now, by: me } : l.last,
+    changedBy: me, changedAt: now, changedWhat: moving ? "Status → " + label + (reason ? " (" + reason + ")" : "") : noAnswer ? "No answer" : "Note",
+  });
+  const tmp = [];
+  if (note) tmp.push({ id: "local-n-" + now, lead_id: id, kind: "note", text: note, by: me, at: now, source: "app" });
+  if (moving) tmp.push({ id: "local-s-" + now, lead_id: id, kind: "status", text: (l.status || "—") + " → " + label + (reason ? " (" + reason + ")" : ""), by: me, at: now, source: "app" });
+  try { localStorage.removeItem("mwpl.draft." + id); } catch (_) {}
+  if (S.open === id) { S.openCopy = guess; S.hist = tmp.concat(S.hist || []); }
+  patch(id, guess); clearPend(id);
+  toast(label ? L("נשמר: ", "Saved: ") + word(label) : L("נשמר", "Saved"));
+  if (S.open === id) renderLead(id, false);
+  S.saving = (S.saving || 0) + 1;
   try {
     const j = await fn("act", { id, label, noAnswer, reason, note: text });
-    try { localStorage.removeItem("mwpl.draft." + id); } catch (_) {}
-    const nl = fromRow(Object.assign(toRow(l), j.fields || {}));
-    S.openCopy = nl; patch(id, nl); clearPend(id);
-    toast(label ? L("נשמר: ", "Saved: ") + word(label) : L("נשמר", "Saved"));
-    renderLead(id, false);
-  } catch (e) { toast(e && e.code === "locked" ? (e.by || "") + L(" עובד/ת על הליד הזה עכשיו", " is working on this lead right now") : errText(e), true); bs.forEach((b) => { b.disabled = false; }); }
+    const nl = fromRow(Object.assign(toRow(S.leads.get(id) || guess), j.fields || {}));
+    if (S.open === id) S.openCopy = nl;
+    patch(id, nl);
+  } catch (e) {
+    if (S.open === id) { S.openCopy = before; S.hist = (S.hist || []).filter((h) => tmp.indexOf(h) < 0); }
+    patch(id, before);
+    if (text) { try { localStorage.setItem("mwpl.draft." + id, text); } catch (_) {} }
+    if (S.open === id) { renderLead(id, false); if (text && $("noteBox")) $("noteBox").value = text; }
+    const who = (before.name || "") + ": ";
+    toast(who + (e && e.code === "locked" ? (e.by || "") + L(" עובד/ת על הליד הזה עכשיו. לא נשמר.", " is working on this lead right now. Not saved.") : L("לא נשמר. ", "Not saved. ") + errText(e)), true);
+  } finally { S.saving--; }
 }
+// a save still on its way to monday: leaving the page would lose it
+window.addEventListener("beforeunload", (ev) => { if (S.saving > 0) { ev.preventDefault(); ev.returnValue = ""; } });
 function toRow(l) {
   return { id: l.id, name: l.name, status: l.status, phone: l.phone, email: l.email, source: l.source, interest: l.interest, about: l.about,
     lang: l.lang, fu_date: l.fuDate, created: l.created, ecb: l.ecb, mcb: l.mcb, ret: l.ret, na: l.na,
