@@ -92,11 +92,16 @@ function lockOf(id) {
   if (S.me && k.by_email === S.me.email) return null;
   return k;
 }
-async function claim(id) {
-  const { data, error } = await sb.rpc("claim_lead", { p_id: id });
+async function claim(id, renew) {
+  const { data, error } = await sb.rpc("claim_lead", renew ? { p_id: id, p_renew: true } : { p_id: id });
   if (error) return { ok: true }; // never block work on a lock error: the server still checks on every press
   return data || { ok: true };
 }
+function keepLock() {
+  clearInterval(S.hb); S.hb = setInterval(async () => { if (S.open && (await claim(S.open, true)).moved) clearInterval(S.hb); }, 60000);
+}
+// back on a page with a lead open (phone woke up, tab chosen again): that lead is this person's again
+document.addEventListener("visibilitychange", () => { if (!document.hidden && S.open) { const id = S.open; claim(id).then((c) => { if (c.ok && S.open === id) keepLock(); }); } });
 function release(id) { if (id) sb.rpc("release_lead", { p_id: id }).then(() => {}, () => {}); }
 
 /* ---------- ranking (unchanged) ---------- */
@@ -251,7 +256,8 @@ async function openLead(id) {
   try { localStorage.setItem("mwpl.open", id); } catch (_) {} // a refresh opens it again; only Close forgets it
   // where the list was and which section the lead was in, to come back to the same place on Close
   S.listY = window.scrollY; S.openSec = secOf(id);
-  clearInterval(S.hb); S.hb = setInterval(() => { if (S.open) claim(S.open); }, 60000);
+  // renew every minute; once this person opens another lead (here or on another device) this one stops renewing
+  keepLock();
   loadHist(id);
   renderLead(id, true);
 }
