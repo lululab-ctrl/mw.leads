@@ -145,11 +145,25 @@ function why(l, f) {
   if (f.old) return L("מחכה ", "Waiting ") + Math.round((Date.now() - l.created) / 864e5) + L(" ימים", " days");
   return "";
 }
+// Search by tour too, in either language: "tiger" also finds "הודו – טיגריסים", "ים המלח" also finds "Dead Sea".
+const TOPICS = [
+  ["dead sea", "ים המלח", "יום המלח"], ["tiger", "טיגריס"], ["snow leopard", "נמר השלג", "ladakh", "לדאק"], // "יום המלח": the old Meta form's spelling
+  ["pelican", "שקנא", "kerkini", "קרקיני", "greece", "יוון"], ["iceland", "איסלנד"], ["japan", "יפן"],
+  ["bear", "דוב", "slovenia", "סלובניה"], ["lynx", "שונר", "spain", "ספרד"],
+  ["pallas", "manul", "מנול", "mongolia", "מונגוליה"], ["monal", "מונאל", "himalaya", "הימלאיה"],
+  ["vulture", "eagle", "נשר", "עיט"], ["field guide", "מדריכי שטח"], ["arava", "ערבה"], ["2027", "not decided", "עוד לא נבחר"],
+];
+function searchTerms(q) {
+  const alts = [q];
+  if (q.length >= 3) TOPICS.forEach((g) => { if (g.some((a) => a.indexOf(q) >= 0 || q.indexOf(a) >= 0)) alts.push(...g); });
+  return alts;
+}
 function rows() {
-  const q = S.q.trim().toLowerCase(), out = [];
+  const q = S.q.trim().toLowerCase(), out = [], alts = q ? searchTerms(q) : null;
   S.leads.forEach((l) => {
     if (l.status === "Won" || l.status === "Lost") return;
-    const show = q ? (l.name + " " + (l.phone || "") + " " + (l.interest || "")).toLowerCase().indexOf(q) >= 0 : true;
+    const hay = q ? [l.name, l.phone, l.email, l.interest, l.about, l.source].join(" ").toLowerCase() : "";
+    const show = q ? alts.some((a) => hay.indexOf(a) >= 0) : true;
     if (show) { l._f = facts(l); l._t = l.status === "Future" ? 4 : l._f.g; out.push(l); }
   });
   out.sort((a, b) => a._f.g - b._f.g || b._f.score - a._f.score || (b.created || 0) - (a.created || 0));
@@ -158,7 +172,7 @@ function rows() {
 function rowHtml(l, callRow) {
   const f = l._f, s = f.old ? { c: "na" } : (STM[l.status] || { c: "future" }), e = tel(l.phone), w = why(l, f);
   const k = lockOf(l.id);
-  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : callRow ? "📞 " + callShort(l.fuAt, l.fuHasTime) + (callLate(l) ? L(" · עבר הזמן", " · overdue") : "") : f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
+  const line = k ? "🔒 " + k.by_name + L(" עובד/ת על הליד", " is working on this lead") : callRow ? "📞 " + callShort(l.fuAt, l.fuHasTime) + (callLate(l) ? L(" · עבר הזמן", " · overdue") : "") : S.q.trim() && l.interest ? l.interest : f.done ? L("טופל היום", "Done today") : (w || l.interest || l.source || "");
   const st = stampText(l);
   const cls = callRow ? (callLate(l) ? " callrow late" : iso(l.fuAt) === iso(Date.now()) ? " callrow today" : " callrow") : "";
   return '<div class="row' + cls + (f.top && w && !k && !callRow ? " hot" : "") + (f.done ? " done" : "") + (k ? " locked" : "") + '" data-id="' + esc(l.id) + '">' +
@@ -172,7 +186,7 @@ function render() {
   $("lang").textContent = S.lang === "he" ? "EN" : "עב";
   $("ttl").textContent = L("MWP לידים", "MWP Leads");
   $("repLbl").textContent = L("דוח", "Report");
-  $("q").placeholder = L("חיפוש", "Search");
+  $("q").placeholder = L("חיפוש: שם, טלפון או מסע", "Search: name, phone or tour");
   $("signout").textContent = L("יציאה", "Sign out");
   $("whoName").textContent = S.me ? S.me.name : (S.user ? S.user.email : "");
   renderSignin();
