@@ -680,6 +680,7 @@ async function finish(label, noAnswer, reason) {
   const box = $("noteBox"), text = (box ? box.value : "").trim();
   if (!label && !noAnswer && !text) { toast(L("קודם כותבים הערה", "Write a note first"), true); return; }
   const bs = $("leadBody").querySelectorAll("button"); bs.forEach((b) => { b.disabled = true; });
+  toast(L("שומר…", "Saving…"));
   try {
     const j = await fn("act", { id, label, noAnswer, reason, note: text });
     try { localStorage.removeItem("mwpl.draft." + id); } catch (_) {}

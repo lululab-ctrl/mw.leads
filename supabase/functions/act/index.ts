@@ -15,6 +15,13 @@ async function stampMonday(db: any, id: string) {
   } catch (e) { console.log("history to monday failed", id, String((e as Error).message)); }
 }
 
+// Work the person doesn't need to wait for (monday's history column, the group move) runs after the
+// answer is sent, so a status or a note saves in about one monday call (Jeinna, 13 Nov 2026).
+function later(p: Promise<unknown>) {
+  const rt = (globalThis as any).EdgeRuntime;
+  if (rt && typeof rt.waitUntil === "function") rt.waitUntil(p); else p.catch(() => {});
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -33,11 +40,13 @@ Deno.serve(async (req) => {
   if (label && !STATUSES.includes(label)) return json({ error: "bad_status" }, 400);
   if (reason && (label !== "Lost" || !LOST.includes(reason))) return json({ error: "bad_reason" }, 400);
 
-  const { data: l } = await db.from("leads").select("*").eq("id", id).maybeSingle();
+  const [{ data: l }, { data: lock }] = await Promise.all([
+    db.from("leads").select("*").eq("id", id).maybeSingle(),
+    db.from("lead_locks").select("by_email,by_name,expires").eq("lead_id", id).maybeSingle(),
+  ]);
   if (!l) return json({ error: "not_found" }, 404);
 
   // one person on a lead at a time
-  const { data: lock } = await db.from("lead_locks").select("by_email,by_name,expires").eq("lead_id", id).maybeSingle();
   if (lock && lock.by_email !== me.email && new Date(lock.expires).getTime() > Date.now()) {
     return json({ ok: false, code: "locked", by: lock.by_name }, 409);
   }
@@ -73,7 +82,7 @@ Deno.serve(async (req) => {
     await db.from("leads").update(fields).eq("id", id);
     const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "call", status_from: l.status, note: what + (note ? " · " + note : "") }).select("id").single();
     await db.from("lead_updates").upsert({ id: "call-" + (act?.id || now), lead_id: id, kind: "call", text: loc.date.split("-").reverse().join(".") + " " + loc.time + (note ? " · " + note : ""), by: me.name, at: now, source: "app" });
-    await stampMonday(db, id);
+    later(stampMonday(db, id));
     return json({ ok: true, fields });
   }
   if (b.callDone === true) {
@@ -88,7 +97,7 @@ Deno.serve(async (req) => {
     await db.from("leads").update(fields).eq("id", id);
     const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind: "call_done", status_from: l.status, note: "Call done" }).select("id").single();
     await db.from("lead_updates").upsert({ id: "calldone-" + (act?.id || now), lead_id: id, kind: "call", text: "done", by: me.name, at: now, source: "app" });
-    await stampMonday(db, id);
+    later(stampMonday(db, id));
     return json({ ok: true, fields });
   }
 
@@ -116,27 +125,38 @@ Deno.serve(async (req) => {
   const fields: Record<string, unknown> = {};
   let updateId: string | null = null;
   const t0 = Date.now();
+  const moving = !!label && label !== l.status;
   try {
-    if (text) {
-      const d = await monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: noteHtml(text, me.name, t0) });
-      updateId = d?.create_update?.id ? String(d.create_update.id) : null;
-      fields.last_t = text.slice(0, 400); fields.last_at = Date.now(); fields.last_by = me.name;
-      // the note is signed in monday ("— Name · date time"); the real author is also kept here,
-      // so the sync, the stamp and the history always show who did it.
-      if (updateId) await db.from("note_authors").upsert({ update_id: updateId, by: me.name, why: "MWP Leads" });
-    }
-    if (noAnswer) fields.na = (l.na || 0) + 1;
-    if (label && label !== l.status) {
+    // the note and the status go to monday at the same time
+    const noteP = text
+      ? monday(`mutation ($i: ID!, $b: String!) { create_update(item_id: $i, body: $b) { id } }`, { i: id, b: noteHtml(text, me.name, t0) })
+      : Promise.resolve(null);
+    let statusP: Promise<unknown> = Promise.resolve(null);
+    if (moving) {
       const cols: Record<string, unknown> = { [C.status]: { label } };
       if (reason) cols[C.lost] = { label: reason };
-      await monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) });
-      fields.status = label;
-      // and to the group of the same name (a failed move never undoes the status change)
-      const g = STATUS_GROUP[label];
-      if (g) {
-        try { await monday(`mutation ($i: ID!, $g: String!) { move_item_to_group(item_id: $i, group_id: $g) { id } }`, { i: id, g }); }
-        catch (e) { console.log("group move failed", id, label, String((e as Error).message)); }
-      }
+      statusP = monday(`mutation ($b: ID!, $i: ID!, $v: JSON!) { change_multiple_column_values(board_id: $b, item_id: $i, column_values: $v) { id } }`, { b: String(BOARD), i: id, v: JSON.stringify(cols) });
+    }
+    const [noteR, statusR] = await Promise.allSettled([noteP, statusP]);
+    if (noteR.status === "fulfilled") {
+      const d: any = noteR.value;
+      updateId = d?.create_update?.id ? String(d.create_update.id) : null;
+      if (text) { fields.last_t = text.slice(0, 400); fields.last_at = Date.now(); fields.last_by = me.name; }
+    }
+    if (moving && statusR.status === "fulfilled") fields.status = label;
+    // a half-done save (the note went but not the status, or the other way) still records the part that went
+    const failed = noteR.status === "rejected" ? noteR.reason : statusR.status === "rejected" ? statusR.reason : null;
+    if (failed) {
+      if (Object.keys(fields).length) await db.from("leads").update(fields).eq("id", id);
+      if (updateId) await db.from("note_authors").upsert({ update_id: updateId, by: me.name, why: "MWP Leads" });
+      throw failed;
+    }
+    if (noAnswer) fields.na = (l.na || 0) + 1;
+    if (moving) {
+      // and to the group of the same name, after the answer (a failed move never undoes the status change)
+      const g = STATUS_GROUP[label!];
+      if (g) later(monday(`mutation ($i: ID!, $g: String!) { move_item_to_group(item_id: $i, group_id: $g) { id } }`, { i: id, g })
+        .catch((e) => console.log("group move failed", id, label, String((e as Error).message))));
     }
     if (label) fields.st_at = Date.now();
     const now = Date.now();
@@ -144,15 +164,20 @@ Deno.serve(async (req) => {
     // the stamp: who, when, what
     fields.changed_by = me.name;
     fields.changed_at = now;
-    fields.changed_what = label && label !== l.status ? "Status → " + label + (reason ? " (" + reason + ")" : "") : noAnswer ? "No answer" : "Note";
-    await db.from("leads").update(fields).eq("id", id);
-    const { data: act } = await db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind, status_from: l.status, status_to: label, lost_reason: reason, note: text || null, monday_update_id: updateId }).select("id").single();
+    fields.changed_what = moving ? "Status → " + label + (reason ? " (" + reason + ")" : "") : noAnswer ? "No answer" : "Note";
+    // the note is signed in monday ("— Name · date time"); the real author is also kept here,
+    // so the sync, the stamp and the history always show who did it.
+    const [, { data: act }] = await Promise.all([
+      db.from("leads").update(fields).eq("id", id),
+      db.from("lead_actions").insert({ lead_id: id, by_email: me.email, by_name: me.name, kind, status_from: l.status, status_to: label, lost_reason: reason, note: text || null, monday_update_id: updateId }).select("id").single(),
+      updateId ? db.from("note_authors").upsert({ update_id: updateId, by: me.name, why: "MWP Leads" }) : Promise.resolve(null),
+    ]);
     // history rows, so the lead screen shows them at once (the sync keeps these, not monday's copies)
     const rows: any[] = [];
     if (text && updateId) rows.push({ id: updateId, lead_id: id, kind: "note", text, by: me.name, at: now, source: "app" });
-    if (label && label !== l.status) rows.push({ id: "app-" + (act?.id || now), lead_id: id, kind: "status", text: (l.status || "—") + " → " + label + (reason ? " (" + reason + ")" : ""), by: me.name, at: now, source: "app" });
+    if (moving) rows.push({ id: "app-" + (act?.id || now), lead_id: id, kind: "status", text: (l.status || "—") + " → " + label + (reason ? " (" + reason + ")" : ""), by: me.name, at: now, source: "app" });
     if (rows.length) await db.from("lead_updates").upsert(rows);
-    await stampMonday(db, id);
+    later(stampMonday(db, id));
     return json({ ok: true, fields });
   } catch (e) {
     const code = e instanceof MondayError ? e.code : "error";
